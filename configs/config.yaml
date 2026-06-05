@@ -1,0 +1,18 @@
+# Main config file
+
+defaults:
+  # Select the model
+  - model: mlp_vqvae
+  # Use the data default config
+  - data: default
+  # Use the trainer default config
+  - trainer: default
+
+# Set the name as the model name
+experiment:
+  name: ${model.name}
+
+# Logs and checkpoints paths
+paths:
+  logs_dir: logs
+  checkpoint_dir: checkpoints

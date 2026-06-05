@@ -1,0 +1,36 @@
+# Trnasformer VQ-VAE model config
+
+# Name of the model
+name: transformer
+
+# Input dimension
+input_dim: 3
+
+# First projection
+hidden_dim: 128
+
+# Number of heads
+n_heads: 8
+
+# Dropout rate
+dropout: 0.1
+
+# Number of NormFormerBlocks
+depth: 4
+
+# Latent dimension (dimension of the codebook vectors)
+latent_dim: 4
+
+# Codebook size (how many codebook vectors)
+codebook_size: 512
+
+# Set the rotation trick (True/False)
+# (If False the model uses STE)
+rotation_trick: False
+
+# Decay (VQ layer)
+decay: 0.8
+
+# Commitment weight
+beta: 0.9
+
