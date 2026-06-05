@@ -12,7 +12,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 
 from src.models.registry import MODEL_REGISTRY
 
-from src.data.data_loading import L1TriggerDataModule
+from data.jet_constituents_data_loading import L1TriggerDataModule
 
 @hydra.main(
     version_base=None,

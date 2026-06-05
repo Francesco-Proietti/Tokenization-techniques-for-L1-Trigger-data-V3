@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path().resolve().parent))
 
-from src.data.data_loading import L1TriggerDataset, L1TriggerDataModule
+from data.jet_constituents_data_loading import L1TriggerDataset, L1TriggerDataModule
 from src.models.mlp_vqvae import MLPVQVAE
 from src.models.transformer_vqvae import TransformerVQVAE
 
