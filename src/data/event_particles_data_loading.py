@@ -14,12 +14,12 @@ from torch.utils.data import IterableDataset, get_worker_info
 import lightning as pl
 
 
-class JetConstL1TriggerDataset(IterableDataset):
+class EventPartL1TriggerDataset(IterableDataset):
     """
     IterableDataset for L1-trigger data from parquet files.
 
     Streams data lazily from parquet files instead of loading all into memory.
-    Each event contains PUPPI particles and jets.
+    Each event contains PUPPI particles with features: pT, eta, phi.
     """
 
     def __init__(
@@ -27,6 +27,7 @@ class JetConstL1TriggerDataset(IterableDataset):
         parquet_dirs: List[str],
         max_particles: int = 128,
         features: List[str] = ["L1T_PUPPIPart_PT", "L1T_PUPPIPart_Eta", "L1T_PUPPIPart_Phi", "L1T_PUPPIPart_PuppiW"],
+        puppiw_threshold: float = 0.05,
         preprocessing: bool = True
     ):
         """
@@ -34,8 +35,9 @@ class JetConstL1TriggerDataset(IterableDataset):
 
         Args:
             parquet_dirs: List of directories containing parquet files.
-            max_particles: Maximum number of particles per jet.
+            max_particles: Maximum number of particles per event.
             features: List of feature to extract.
+            puppiw_threshold: Minimum PUPPI weight for particles.
             preprocessing: Whether to apply preprocessing.
         """
         super().__init__()
@@ -43,76 +45,48 @@ class JetConstL1TriggerDataset(IterableDataset):
         self.dataset = ds.dataset(parquet_dirs, format="parquet")
         self.max_particles = max_particles
         self.features = features
-        self.kin_coord_num = 3
+        self.coords = features[:-1] #Exclude PuppiW from coordinates
+        self.puppiw_threshold = puppiw_threshold
         self.preprocessing = preprocessing
 
     def _process_event(self, row: pd.Series) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Process a single event row into padded features and mask per jet. (constituent-level)
-        Each event can contain more than one jet.
+        Process a single event row into padded features and mask.
 
         Returns:
-            features: [max_particles, kin_features (3)] tensor
+            features: [max_particles, n_coords] tensor
             mask: [max_particles] boolean tensor
         """
+        n_coords = len(self.coords)
+        feats = np.zeros((self.max_particles, n_coords), dtype=np.float32)
+        mask = np.zeros(self.max_particles, dtype=bool)
 
-        kin_coord_num = self.kin_coord_num
+        # Apply puppiw filter
+        puppiw = row["L1T_PUPPIPart_PuppiW"]
+        valid_mask = np.array(puppiw) >= self.puppiw_threshold
 
-        const_pt = np.array(row["L1T_PUPPIPart_PT"])
-        const_eta = np.array(row["L1T_PUPPIPart_Eta"])
-        const_phi = np.array(row["L1T_PUPPIPart_Phi"])
-        const_idx = np.array(row["L1T_JetPuppiAK4_ConstituentsIdx"])
-
-        jet_pt = np.array(row["L1T_JetPuppiAK4_PT"])
-        jet_eta = np.array(row["L1T_JetPuppiAK4_Eta"])
-        jet_phi = np.array(row["L1T_JetPuppiAK4_Phi"])
-        jet_mass = np.array(row["L1T_JetPuppiAK4_Mass"])
-        
-        # For loop among jets of the same event
-        for i, j in enumerate(const_idx):
+        # Preprocessing 
+        if self.preprocessing:
             
-            #Jet-level features
-            jet_features = torch.FloatTensor([
-                jet_pt[i],
-                jet_eta[i],
-                jet_phi[i],
-                jet_mass[i],
-            ])
+            pt = np.array(row["L1T_PUPPIPart_PT"])
+            eta = np.array(row["L1T_PUPPIPart_Eta"])
+            phi = np.array(row["L1T_PUPPIPart_Phi"])
+            pt = np.log(pt + 1e-8) - 1.8  
+            eta = eta / 3
+            phi = phi / np.pi
+            row["L1T_PUPPIPart_PT"] = pt
+            row["L1T_PUPPIPart_Eta"] = eta
+            row["L1T_PUPPIPart_Phi"] = phi
 
-            # Apply constituents' mask
-            j_const_pt = const_pt[j]
-            j_const_eta = const_eta[j]
-            j_const_phi = const_phi[j]
-
-            # Preprocessing 
-            if self.preprocessing:
-                
-                # Relative features WRT the jet axis
-                j_const_eta = j_const_eta - jet_eta[i]
-                j_const_phi = j_const_phi - jet_phi[i]
-                j_const_phi = (j_const_phi + np.pi) % (2 * np.pi) - np.pi
-                
-                # Scaling
-                j_const_pt = np.log(j_const_pt + 1e-8) - 1.8
-                j_const_eta = j_const_eta / 3
-                j_const_phi = j_const_phi / 3
-
-            n_particles = min(len(j_const_pt), self.max_particles)
-
-            feats = np.zeros((self.max_particles, kin_coord_num), dtype=np.float32)
-            mask = np.zeros(self.max_particles, dtype=bool)
-
-            feats[:n_particles, 0] = j_const_pt[:n_particles]
-            feats[:n_particles, 1] = j_const_eta[:n_particles]
-            feats[:n_particles, 2] = j_const_phi[:n_particles]
-
+        # Filter particles
+        for feat_idx, feat_name in enumerate(self.coords):
+            particles_feat = row[feat_name]
+            particles_feat = np.array(particles_feat)[valid_mask]
+            n_particles = min(len(particles_feat), self.max_particles)
+            feats[:n_particles, feat_idx] = particles_feat[:n_particles]
             mask[:n_particles] = True
-            
-            yield (
-                torch.FloatTensor(feats),
-                torch.BoolTensor(mask),
-                jet_features,
-            )
+        
+        return torch.FloatTensor(feats), torch.BoolTensor(mask)
 
     def __iter__(self) -> Iterator[Tuple]:
         """
@@ -139,11 +113,10 @@ class JetConstL1TriggerDataset(IterableDataset):
             df = batch.to_pandas()
 
             for i in range(len(df)):
-                for data in self._process_event(df.iloc[i]):
-                    yield data
+                yield self._process_event(df.iloc[i])
 
 
-class JetConstL1TriggerDataModule(pl.LightningDataModule):
+class EventPartL1TriggerDataModule(pl.LightningDataModule):
     """
     PyTorch Lightning DataModule for L1-trigger data.
     """
@@ -157,6 +130,7 @@ class JetConstL1TriggerDataModule(pl.LightningDataModule):
         batch_size: int = 32,
         num_workers: int = 0,
         features: List[str] = ["L1T_PUPPIPart_PT", "L1T_PUPPIPart_Eta", "L1T_PUPPIPart_Phi", "L1T_PUPPIPart_PuppiW"],
+        puppiw_threshold: float = 0.05,
         preprocessing: bool = True
     ):
         """
@@ -181,14 +155,16 @@ class JetConstL1TriggerDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.features = features
+        self.puppiw_threshold = puppiw_threshold
         self.preprocessing = preprocessing
 
     def train_dataloader(self):
         """Return training dataloader."""
-        self.train_dataset = JetConstL1TriggerDataset(
+        self.train_dataset = EventPartL1TriggerDataset(
             parquet_dirs=self.train_dirs,
             max_particles=self.max_particles,
             features=self.features,
+            puppiw_threshold=self.puppiw_threshold,
             preprocessing=self.preprocessing
         )
         return torch.utils.data.DataLoader(
@@ -201,10 +177,11 @@ class JetConstL1TriggerDataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         """Return validation dataloader."""
-        self.val_dataset = JetConstL1TriggerDataset(
+        self.val_dataset = EventPartL1TriggerDataset(
             parquet_dirs=self.val_dirs,
             max_particles=self.max_particles,
             features=self.features,
+            puppiw_threshold=self.puppiw_threshold,
             preprocessing=self.preprocessing
         )
         return torch.utils.data.DataLoader(
@@ -217,10 +194,11 @@ class JetConstL1TriggerDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         """Return test dataloader."""
-        self.test_dataset = JetConstL1TriggerDataset(
+        self.test_dataset = EventPartL1TriggerDataset(
             parquet_dirs=self.test_dirs,
             max_particles=self.max_particles,
             features=self.features,
+            puppiw_threshold=self.puppiw_threshold,
             preprocessing=self.preprocessing
         )
         return torch.utils.data.DataLoader(
