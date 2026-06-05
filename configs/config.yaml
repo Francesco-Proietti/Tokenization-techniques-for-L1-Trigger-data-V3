@@ -10,7 +10,7 @@ defaults:
 
 # Set the name as the model name
 experiment:
-  name: ${model.name}
+  name: ${model.name}-${data.name}-${model.rotation_trick}-${model.codebook_size}
 
 # Logs and checkpoints paths
 paths:

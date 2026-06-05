@@ -29,7 +29,7 @@ def main(cfg: DictConfig):
     data_name = cfg.data.name
     DataModuleClass = DATA_REGISTRY[data_name]
 
-    data_module = DataModuleClass(cfg.data)
+    data_module = DataModuleClass(cfg.data, batch_size=cfg.trainer.batch_size)
 
     # Model
     model_name = cfg.model.name
