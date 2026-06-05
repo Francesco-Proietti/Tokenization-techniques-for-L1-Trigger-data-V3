@@ -10,7 +10,7 @@ import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 
-from src.models.registry import MODEL_REGISTRY
+from src.models.model_registry import MODEL_REGISTRY
 
 from data.jet_constituents_data_loading import L1TriggerDataModule
 
