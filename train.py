@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Training script"""
 
+# Import libraries
 import hydra
 from omegaconf import DictConfig
 
@@ -10,9 +11,9 @@ import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 
+# Import model and data registries
 from src.models.model_registry import MODEL_REGISTRY
-
-from data.jet_constituents_data_loading import L1TriggerDataModule
+from src.data.data_registry import DATA_REGISTRY
 
 @hydra.main(
     version_base=None,
@@ -25,15 +26,10 @@ def main(cfg: DictConfig):
     pl.seed_everything(cfg.trainer.seed, workers=True)
 
     # DataModule
-    data_module = L1TriggerDataModule(
-        parquet_dirs_train=cfg.data.train_path,
-        parquet_dirs_val=cfg.data.val_path,
-        parquet_dirs_test=cfg.data.test_path,
-        max_particles=cfg.data.max_particles,
-        batch_size=cfg.trainer.batch_size,
-        features=list(cfg.data.features),
-        preprocessing=cfg.data.preprocessing
-    )
+    data_name = cfg.data.name
+    DataModuleClass = DATA_REGISTRY[data_name]
+
+    data_module = DataModuleClass(cfg.data)
 
     # Model
     model_name = cfg.model.name

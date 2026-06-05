@@ -24,3 +24,8 @@ max_particles: 128
 
 # Set the preprocessing (True/False)
 preprocessing: true
+
+puppiw_threshold: 0.05
+
+# Number of workers
+num_workers: 0

@@ -19,7 +19,10 @@ features:
   - L1T_JetPuppiAK4_Phi
 
 # Select the maximum number of jets per event
-max_particles: 128
+max_jets: 128
 
 # Set the preprocessing (True/False)
 preprocessing: true
+
+# Number of workers
+num_workers: 0

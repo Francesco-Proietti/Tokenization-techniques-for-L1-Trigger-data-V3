@@ -114,14 +114,8 @@ class EventJetsL1TriggerDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        parquet_dirs_train: List[str],
-        parquet_dirs_val: List[str],
-        parquet_dirs_test: List[str],
-        max_jets: int = 128,
-        batch_size: int = 32,
-        num_workers: int = 0,
-        features: List[str] = ["L1T_JetPuppiAK4_PT", "L1T_JetPuppiAK4_Eta", "L1T_JetPuppiAK4_Phi"],
-        preprocessing: bool = True
+        cfg,
+        batch_size: int = 32
     ):
         """
         Initialize the DataModule.
@@ -138,14 +132,14 @@ class EventJetsL1TriggerDataModule(pl.LightningDataModule):
         """
         super().__init__()
 
-        self.train_dirs = parquet_dirs_train
-        self.val_dirs = parquet_dirs_val or []
-        self.test_dirs = parquet_dirs_test or []
-        self.max_jets = max_jets
+        self.train_dirs = cfg.train_path
+        self.val_dirs = cfg.val_path or []
+        self.test_dirs = cfg.test_path or []
+        self.max_jets = cfg.max_jets
         self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.features = features
-        self.preprocessing = preprocessing
+        self.num_workers = cfg.num_workers
+        self.features = cfg.features
+        self.preprocessing = cfg.preprocessing
 
     def train_dataloader(self):
         """Return training dataloader."""

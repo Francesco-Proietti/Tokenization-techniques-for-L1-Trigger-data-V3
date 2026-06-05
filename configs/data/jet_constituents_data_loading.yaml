@@ -29,3 +29,6 @@ max_particles: 128
 
 # Set the preprocessing (True/False)
 preprocessing: true
+
+# Number of workers
+num_workers: 0

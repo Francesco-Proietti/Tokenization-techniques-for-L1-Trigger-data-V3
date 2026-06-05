@@ -4,7 +4,7 @@ defaults:
   # Select the model
   - model: mlp_vqvae
   # Use the data default config
-  - data: default
+  - data: jet_constituents_data_loading
   # Use the trainer default config
   - trainer: default
 
