@@ -1,4 +1,7 @@
-# Default data config
+# Event jets data-loading config
+
+# Name of the data-loading
+name: event_jets
 
 # Path to the train folder
 train_path: "/run/media/francesco/STORAGE/data_cern/Train"
@@ -11,18 +14,11 @@ test_path: "/run/media/francesco/STORAGE/data_cern/Test"
 
 # Select the features
 features:
-  - L1T_PUPPIPart_PT
-  - L1T_PUPPIPart_Eta
-  - L1T_PUPPIPart_Phi
-  - L1T_PUPPIPart_PuppiW
   - L1T_JetPuppiAK4_PT
   - L1T_JetPuppiAK4_Eta
   - L1T_JetPuppiAK4_Phi
-  - L1T_JetPuppiAK4_Mass
-  - L1T_JetPuppiAK4_ConstituentsIdx
 
-
-# Select the maximum number of particles per single jet
+# Select the maximum number of jets per event
 max_particles: 128
 
 # Set the preprocessing (True/False)

@@ -1,0 +1,26 @@
+# Event particles data-loading config
+
+# Name of the data-loading
+name: event_part
+
+# Path to the train folder
+train_path: "/run/media/francesco/STORAGE/data_cern/Train"
+
+# Path to the validation folder
+val_path: "/run/media/francesco/STORAGE/data_cern/Val"
+
+# Path to the test folder
+test_path: "/run/media/francesco/STORAGE/data_cern/Test"
+
+# Select the features
+features:
+  - L1T_PUPPIPart_PT
+  - L1T_PUPPIPart_Eta
+  - L1T_PUPPIPart_Phi
+  - L1T_PUPPIPart_PuppiW
+
+# Select the maximum number of particles per event
+max_particles: 128
+
+# Set the preprocessing (True/False)
+preprocessing: true
