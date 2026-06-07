@@ -138,7 +138,7 @@ class EventJetsL1TriggerDataModule(pl.LightningDataModule):
         self.max_jets = cfg.max_jets
         self.batch_size = batch_size
         self.num_workers = cfg.num_workers
-        self.features = cfg.features
+        self.features = list(cfg.features)
         self.preprocessing = cfg.preprocessing
 
     def train_dataloader(self):

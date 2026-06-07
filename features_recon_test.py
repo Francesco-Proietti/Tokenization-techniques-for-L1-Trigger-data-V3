@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path().resolve().parent))
 
-from data.jet_constituents_data_loading import L1TriggerDataset, L1TriggerDataModule
+from src.data.jet_constituents_data_loading import JetConstL1TriggerDataset, JetConstL1TriggerDataModule
 from src.models.mlp_vqvae import MLPVQVAE
 from src.models.transformer_vqvae import TransformerVQVAE
 
@@ -98,7 +98,7 @@ def jet_mass(pt, eta, phi, mask):
 def main():
     
     # Datamodule not preprocessed
-    datamodule_not_prep = L1TriggerDataModule(
+    datamodule_not_prep = JetConstL1TriggerDataModule(
         parquet_dirs_train="/run/media/francesco/STORAGE/data_cern/Train",
         parquet_dirs_val="/run/media/francesco/STORAGE/data_cern/Val",
         parquet_dirs_test="/run/media/francesco/STORAGE/data_cern/Test",
@@ -119,7 +119,7 @@ def main():
     )
     
     # Datamodule preprocessed
-    datamodule_prep = L1TriggerDataModule(
+    datamodule_prep = JetConstL1TriggerDataModule(
         parquet_dirs_train="/run/media/francesco/STORAGE/data_cern/Train",
         parquet_dirs_val="/run/media/francesco/STORAGE/data_cern/Val",
         parquet_dirs_test="/run/media/francesco/STORAGE/data_cern/Test",

@@ -46,7 +46,7 @@ def main(cfg: DictConfig):
     # Checkpoints
     checkpoint_callback = ModelCheckpoint(
         dirpath=f"{cfg.paths.checkpoint_dir}/{cfg.experiment.name}",
-        filename=f"v{logger.version}" + "-{epoch:02d}-{val_loss:.4f}" + "-{cfg.experiment.name}",
+        filename=f"v{logger.version}" + "-{epoch:02d}-{val_loss:.4f}" + f"-{cfg.experiment.name}",
         monitor="val_loss",
         mode="min",
         save_top_k=3,

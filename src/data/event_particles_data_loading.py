@@ -147,7 +147,7 @@ class EventPartL1TriggerDataModule(pl.LightningDataModule):
         self.max_particles = cfg.max_particles
         self.batch_size = batch_size
         self.num_workers = cfg.num_workers
-        self.features = cfg.features
+        self.features = list(cfg.features)
         self.puppiw_threshold = cfg.puppiw_threshold
         self.preprocessing = cfg.preprocessing
 
