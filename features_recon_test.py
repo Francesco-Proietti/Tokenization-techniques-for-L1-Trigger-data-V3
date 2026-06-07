@@ -1,16 +1,23 @@
-import sys
+#!/usr/bin/env python3
+"""First test script"""
+
+# Import libraries
+import hydra
+from omegaconf import DictConfig, OmegaConf
+
 from pathlib import Path
 
-sys.path.append(str(Path().resolve().parent))
-
-from src.data.jet_constituents_data_loading import JetConstL1TriggerDataset, JetConstL1TriggerDataModule
-from src.models.mlp_vqvae import MLPVQVAE
-from src.models.transformer_vqvae import TransformerVQVAE
-
-import matplotlib.pyplot as plt
+import lightning as pl
 import torch
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
+
+# Import model and data registries
+from src.models.model_registry import MODEL_REGISTRY
+from src.data.data_registry import DATA_REGISTRY
+from src.models.mlp_vqvae import MLPVQVAE
+from src.models.transformer_vqvae import TransformerVQVAE
 
 # Inverse preprocessing function
 def inverse_preprocessing(
@@ -74,96 +81,55 @@ def inverse_preprocessing(
     
     return recovered
 
+@hydra.main(
+    version_base=None,
+    config_path="configs",
+    config_name="config"
+)
+def main(cfg: DictConfig):
 
-def jet_mass(pt, eta, phi, mask):
-
-    mask = mask.float()
-
-    px = pt * torch.cos(phi) * mask
-    py = pt * torch.sin(phi) * mask
-    pz = pt * torch.sinh(eta) * mask
-
-    E = pt * torch.cosh(eta) * mask
-
-    px_tot = px.sum(dim=-1)
-    py_tot = py.sum(dim=-1)
-    pz_tot = pz.sum(dim=-1)
-    E_tot  = E.sum(dim=-1)
-
-    m2 = E_tot**2 - px_tot**2 - py_tot**2 - pz_tot**2
-
-    return torch.sqrt(torch.clamp(m2, min=0))
-
-
-def main():
+    # Set seed for reproducibility
+    pl.seed_everything(cfg.trainer.seed, workers=True)
     
-    # Datamodule not preprocessed
-    datamodule_not_prep = JetConstL1TriggerDataModule(
-        parquet_dirs_train="/run/media/francesco/STORAGE/data_cern/Train",
-        parquet_dirs_val="/run/media/francesco/STORAGE/data_cern/Val",
-        parquet_dirs_test="/run/media/francesco/STORAGE/data_cern/Test",
-        max_particles=128,
-        batch_size=32,
-        num_workers=0,
-        features=["L1T_PUPPIPart_PT",
-                "L1T_PUPPIPart_Eta",
-                "L1T_PUPPIPart_Phi",
-                "L1T_PUPPIPart_PuppiW",
-                "L1T_JetPuppiAK4_PT", 
-                "L1T_JetPuppiAK4_Eta",
-                "L1T_JetPuppiAK4_Phi",
-                "L1T_JetPuppiAK4_Mass",
-                "L1T_JetPuppiAK4_ConstituentsIdx"
-        ],
-        preprocessing=False
+    # Set custom config (only for this script)
+    dm_not_prep_cfg = OmegaConf.merge(
+        cfg.data,
+        {
+            "preprocessing": False,
+        },
     )
+
+    dm_prep_cfg = OmegaConf.merge(
+        cfg.data,
+        {
+            "preprocessing": True,
+        },
+    )
+
+    # DataModule
+    data_name = cfg.data.name
+    DataModuleClass = DATA_REGISTRY[data_name]
+
+    data_module_not_prep = DataModuleClass(dm_not_prep_cfg, batch_size=cfg.trainer.batch_size)
+    data_module_prep = DataModuleClass(dm_prep_cfg, batch_size=cfg.trainer.batch_size)
     
-    # Datamodule preprocessed
-    datamodule_prep = JetConstL1TriggerDataModule(
-        parquet_dirs_train="/run/media/francesco/STORAGE/data_cern/Train",
-        parquet_dirs_val="/run/media/francesco/STORAGE/data_cern/Val",
-        parquet_dirs_test="/run/media/francesco/STORAGE/data_cern/Test",
-        max_particles=128,
-        batch_size=32,
-        num_workers=0,
-        features=["L1T_PUPPIPart_PT",
-                "L1T_PUPPIPart_Eta",
-                "L1T_PUPPIPart_Phi",
-                "L1T_PUPPIPart_PuppiW",
-                "L1T_JetPuppiAK4_PT", 
-                "L1T_JetPuppiAK4_Eta",
-                "L1T_JetPuppiAK4_Phi",
-                "L1T_JetPuppiAK4_Mass",
-                "L1T_JetPuppiAK4_ConstituentsIdx"
-        ],
-        preprocessing=True
-    )    
-    
-    # Print to terminal the possible choices for the model
-    print("1) MLP_VQVAE")
-    print("2) Transformer_VQVAE")
-    
-    choice = input("Select 1 or 2: ")
-    
-    while choice not in (["1","2"]):
-        choice = input("INVALID ENTRY! Select 1 or 2: ")
-    
+    # Dataloader initialization
+    data_loader_not_prep = data_module_not_prep.test_dataloader()
+    data_loader_prep = data_module_prep.test_dataloader()
+
     # Checkpoint selection
     checkpoint = input("Enter the complete checkpoint's path: ")
-    
+
     path = Path(checkpoint)
+
+    # Model
+    model_name = cfg.model.name
     
-    if choice == "1":
+    if model_name == "mlp":
         model = MLPVQVAE.load_from_checkpoint(path, weights_only=False)
-    elif choice == "2":
+    elif model_name == "transformer":
         model = TransformerVQVAE.load_from_checkpoint(path, weights_only=False)
 
-    print("Wait until the process is completed")
-    
-    # Dataloaders initialization
-    dataloader_test_not_prep = datamodule_not_prep.test_dataloader()
-    dataloader_test_prep = datamodule_prep.test_dataloader()
-    
     # Set model in evaluation mode
     model.eval()
     
@@ -174,29 +140,14 @@ def main():
     pt_orig = []
     eta_orig = []
     phi_orig = []
-
-    pt_output = []
-    pt_orig_no_pro = []
     
     pt_reco = []
     eta_reco = []
     phi_reco = []
 
-    j_m_reco = []
-
     idx = []
 
-    j_m_orig = []
-    
-    for batch in tqdm(dataloader_test_prep, desc="Looking for original features"):
-        
-        x, m, j = batch
-
-        pt_o_no_pro = x[:, :, 0]
-        
-        pt_orig_no_pro.extend(pt_o_no_pro[m].cpu())
-
-    for batch in tqdm(dataloader_test_not_prep, desc="Looking for original features"):
+    for batch in tqdm(data_loader_not_prep, desc="Looking for original features"):
         
         x, m, j = batch
 
@@ -204,16 +155,11 @@ def main():
         eta_o = x[:, :, 1]
         phi_o = x[:, :, 2]
 
-        j_m_o = j[:,3]
-
         pt_orig.extend(pt_o[m].cpu())
         eta_orig.extend(eta_o[m].cpu())
         phi_orig.extend(phi_o[m].cpu())
-
-        j_m_orig.extend(j_m_o.flatten().cpu())
     
-
-    for batch in tqdm(dataloader_test_prep, desc="Computing reconstructed features"):
+    for batch in tqdm(data_loader_prep, desc="Computing reconstructed features"):
 
         x, m, j = batch
 
@@ -233,17 +179,11 @@ def main():
             eta_r = reco[:, :, 1]
             phi_r = reco[:, :, 2]
 
-            j_m_r = jet_mass(pt_r, eta_r, phi_r, m)
-
             pt_reco.extend(pt_r[m].cpu())
             eta_reco.extend(eta_r[m].cpu())
             phi_reco.extend(phi_r[m].cpu())
 
-            j_m_reco.extend(j_m_r.flatten().cpu())
-
             idx.extend(output[2].flatten().cpu())
-
-            pt_output.extend(pt_out[m].cpu())
 
     print("Plotting...")
     
@@ -262,14 +202,6 @@ def main():
     plt.legend()
     plt.show()
 
-    plt.hist(np.array(pt_reco) - np.array(pt_orig), density=True, bins=50, color="blue", label="Residuals")
-    plt.xlabel("PT [GeV]")
-    plt.ylabel("Density")
-    plt.xlim(-100,100)
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
-    plt.legend()
-    plt.show()
-
     plt.hist(eta_orig, density=True, bins=50, color="blue", label="Original")
     plt.hist(eta_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
     plt.xlabel("Eta")
@@ -284,21 +216,6 @@ def main():
     plt.ylabel("Density")
     plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
     plt.legend()
-    plt.show()
-
-    plt.hist(pt_orig_no_pro, density=True, bins=50, color="blue", label="Original")
-    plt.hist(pt_output, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
-    plt.xlabel("PT (preprocessed)")
-    plt.ylabel("Density")
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
-    plt.legend()
-    plt.show()
-
-    plt.hist(j_m_orig, density=True, bins=50, color="blue", label="Original")
-    plt.hist(j_m_reco, density=True, bins=50, color="red", label="Reconstructed")
-    plt.xlabel("Jet mass")
-    plt.ylabel("Density")
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
     plt.show()
 
     plt.hist(idx, density=True, bins=50, color="orange")
