@@ -35,25 +35,18 @@ def main(cfg: DictConfig):
     model_name = cfg.model.name
     ModelClass = MODEL_REGISTRY[model_name]
 
-    if cfg.model.rotation_trick:
-        rt = "Rotation"
-    else:
-        rt="No_Rotation"
-
-    cb_size = str(cfg.model.codebook_size)
-
     model = ModelClass(cfg.model, lr=cfg.trainer.lr)
 
     # Logger
     logger = TensorBoardLogger(
         save_dir=cfg.paths.logs_dir,
-        name=cfg.experiment.name + rt + cb_size
+        name=cfg.experiment.name
     )
 
     # Checkpoints
     checkpoint_callback = ModelCheckpoint(
         dirpath=f"{cfg.paths.checkpoint_dir}/{cfg.experiment.name}",
-        filename=f"v{logger.version}" + "-{epoch:02d}-{val_loss:.4f}" + rt + cb_size,
+        filename=f"v{logger.version}" + "-{epoch:02d}-{val_loss:.4f}" + "-{cfg.experiment.name}",
         monitor="val_loss",
         mode="min",
         save_top_k=3,
