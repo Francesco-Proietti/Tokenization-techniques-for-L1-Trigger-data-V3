@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""First test script"""
+"""First test script""" 
+# At the moment it works only for MLP VQ-VAE and jet-constituents dataloader
 
 # Import libraries
-import hydra
-from omegaconf import DictConfig, OmegaConf
-
 from pathlib import Path
 
 import lightning as pl
@@ -13,9 +11,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-# Import model and data registries
-from src.models.model_registry import MODEL_REGISTRY
-from src.data.data_registry import DATA_REGISTRY
+# Import models and data-loadings
+from src.data.event_jets_data_loading import EventJetsL1TriggerDataset
+from src.data.event_particles_data_loading import EventPartL1TriggerDataset
+from src.data.jet_constituents_data_loading import JetConstL1TriggerDataset
 from src.models.mlp_vqvae import MLPVQVAE
 from src.models.transformer_vqvae import TransformerVQVAE
 
@@ -81,54 +80,70 @@ def inverse_preprocessing(
     
     return recovered
 
-@hydra.main(
-    version_base=None,
-    config_path="configs",
-    config_name="config"
-)
-def main(cfg: DictConfig):
+
+def main():
 
     # Set seed for reproducibility
-    pl.seed_everything(cfg.trainer.seed, workers=True)
+    pl.seed_everything(42, workers=True)
     
-    # Set custom config (only for this script)
-    dm_not_prep_cfg = OmegaConf.merge(
-        cfg.data,
-        {
-            "preprocessing": False,
-        },
+    # Dataset not preprocessed (jet-constituents)
+    dataset_not_prep = JetConstL1TriggerDataset(
+        parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
+        max_particles=128,
+        features=["L1T_PUPPIPart_PT",
+                "L1T_PUPPIPart_Eta",
+                "L1T_PUPPIPart_Phi",
+                "L1T_PUPPIPart_PuppiW",
+                "L1T_JetPuppiAK4_PT",
+                "L1T_JetPuppiAK4_Eta",
+                "L1T_JetPuppiAK4_Phi",
+                "L1T_JetPuppiAK4_Mass",
+                "L1T_JetPuppiAK4_ConstituentsIdx"
+        ],
+        preprocessing=False
     )
 
-    dm_prep_cfg = OmegaConf.merge(
-        cfg.data,
-        {
-            "preprocessing": True,
-        },
+    # Dataset preprocessed (jet constituents)
+    dataset_prep = JetConstL1TriggerDataset(
+        parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
+        max_particles=128,
+        features=["L1T_PUPPIPart_PT",
+                "L1T_PUPPIPart_Eta",
+                "L1T_PUPPIPart_Phi",
+                "L1T_PUPPIPart_PuppiW",
+                "L1T_JetPuppiAK4_PT",
+                "L1T_JetPuppiAK4_Eta",
+                "L1T_JetPuppiAK4_Phi",
+                "L1T_JetPuppiAK4_Mass",
+                "L1T_JetPuppiAK4_ConstituentsIdx"
+        ],
+        preprocessing=True
     )
 
-    # DataModule
-    data_name = cfg.data.name
-    DataModuleClass = DATA_REGISTRY[data_name]
+    # Dataloader not preprocessed
+    data_loader_not_prep = torch.utils.data.DataLoader(
+        dataset_not_prep,
+        batch_size=32,
+        num_workers=0,
+        pin_memory=True
+    )
 
-    data_module_not_prep = DataModuleClass(dm_not_prep_cfg, batch_size=cfg.trainer.batch_size)
-    data_module_prep = DataModuleClass(dm_prep_cfg, batch_size=cfg.trainer.batch_size)
-    
-    # Dataloader initialization
-    data_loader_not_prep = data_module_not_prep.test_dataloader()
-    data_loader_prep = data_module_prep.test_dataloader()
+    # Dataloader preprocessed
+    data_loader_prep = torch.utils.data.DataLoader(
+        dataset_prep,
+        batch_size=32,
+        num_workers=0,
+        pin_memory=True
+    )
 
     # Checkpoint selection
     checkpoint = input("Enter the complete checkpoint's path: ")
 
     path = Path(checkpoint)
 
-    # Model
-    model_name = cfg.model.name
-    
-    if model_name == "mlp":
-        model = MLPVQVAE.load_from_checkpoint(path, weights_only=False)
-    elif model_name == "transformer":
-        model = TransformerVQVAE.load_from_checkpoint(path, weights_only=False)
+    # Model (uncomment the one you want to test)
+    model = MLPVQVAE.load_from_checkpoint(path, weights_only=False)
+    #model = TranformerVQVAE.load_from_checkpoint(path, weights_only=False)
 
     # Set model in evaluation mode
     model.eval()
@@ -146,7 +161,8 @@ def main(cfg: DictConfig):
     phi_reco = []
 
     idx = []
-
+    
+    # Collect original features
     for batch in tqdm(data_loader_not_prep, desc="Looking for original features"):
         
         x, m, j = batch
@@ -159,6 +175,7 @@ def main(cfg: DictConfig):
         eta_orig.extend(eta_o[m].cpu())
         phi_orig.extend(phi_o[m].cpu())
     
+    # Collect reconstructed features and codebook indices
     for batch in tqdm(data_loader_prep, desc="Computing reconstructed features"):
 
         x, m, j = batch
@@ -170,8 +187,6 @@ def main(cfg: DictConfig):
         with torch.no_grad():
 
             output = model(x,m)
-
-            pt_out = output[0][:, :, 0]
         
             reco = inverse_preprocessing(output[0], m, j)
             
@@ -187,13 +202,16 @@ def main(cfg: DictConfig):
 
     print("Plotting...")
     
+    # Hyperparameters
     ckpt = torch.load(path, weights_only=False)
     model_name = str(ckpt["hyper_parameters"]["cfg"]["name"])
     cb_size = str(ckpt["hyper_parameters"]["cfg"]["codebook_size"])
     rot = str(ckpt["hyper_parameters"]["cfg"]["rotation_trick"])
     
+    # Codebook usage
     cb_usage = len(torch.unique(torch.stack(idx))) / int(cb_size)
-
+  
+    # PT plot
     plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original")
     plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
     plt.xlabel("PT [GeV]")
@@ -201,7 +219,8 @@ def main(cfg: DictConfig):
     plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
     plt.legend()
     plt.show()
-
+    
+    # Eta plot
     plt.hist(eta_orig, density=True, bins=50, color="blue", label="Original")
     plt.hist(eta_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
     plt.xlabel("Eta")
@@ -210,6 +229,7 @@ def main(cfg: DictConfig):
     plt.legend()
     plt.show()
     
+    # Phi plot
     plt.hist(phi_orig, density=True, bins=50, color="blue", label="Original")
     plt.hist(phi_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
     plt.xlabel("Phi")
@@ -217,7 +237,8 @@ def main(cfg: DictConfig):
     plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
     plt.legend()
     plt.show()
-
+    
+    # Codebook usage plot
     plt.hist(idx, density=True, bins=50, color="orange")
     plt.xlim(0, 512)
     plt.xlabel(f"Quantization indices (CB-usage={cb_usage})")
