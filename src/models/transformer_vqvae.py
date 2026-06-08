@@ -249,7 +249,7 @@ class TransformerVQVAE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         
-        x, mask, _ = batch
+        x, mask = batch
 
         x_recon, commit_loss, _ = self(x, mask)
 
@@ -275,7 +275,7 @@ class TransformerVQVAE(pl.LightningModule):
     # Validation Step
     def validation_step(self, batch, batch_idx):
 
-        x, mask, _ = batch
+        x, mask = batch
 
         x_recon, commit_loss, _ = self(x, mask)
         
@@ -301,7 +301,7 @@ class TransformerVQVAE(pl.LightningModule):
     #Test step
     def test_step(self, batch, batch_idx):
         
-        x, mask, _ = batch
+        x, mask = batch
 
         x_recon, commit_loss, _ = self(x, mask)
 

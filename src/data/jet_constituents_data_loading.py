@@ -111,7 +111,7 @@ class JetConstL1TriggerDataset(IterableDataset):
             yield (
                 torch.FloatTensor(feats),
                 torch.BoolTensor(mask),
-                jet_features,
+                #jet_features,
             )
 
     def __iter__(self) -> Iterator[Tuple]:
