@@ -127,6 +127,7 @@ class MLPVQVAE(pl.LightningModule):
         self.decay = cfg.decay
         self.beta = cfg.beta
         self.lr = lr
+        self.jet_features = cfg.jet_features
 
         self.encoder_hidden_dims = cfg.encoder_hidden_dims or self.hidden_dims
         self.decoder_hidden_dims = cfg.decoder_hidden_dims or list(reversed(self.hidden_dims))
@@ -200,7 +201,10 @@ class MLPVQVAE(pl.LightningModule):
     # Training Step
     def training_step(self, batch, batch_idx):
         
-        x, mask = batch 
+        if self.jet_features:
+            x, mask, _ = batch
+        else:
+            x, mask = batch 
 
         x_recon, commit_loss, _ = self(x, mask)
 
@@ -227,7 +231,10 @@ class MLPVQVAE(pl.LightningModule):
     # Validation Step
     def validation_step(self, batch, batch_idx):
 
-        x, mask = batch
+        if self.jet_features:
+            x, mask, _ = batch
+        else:
+            x, mask = batch 
 
         x_recon, commit_loss, _ = self(x, mask)
         
@@ -253,7 +260,10 @@ class MLPVQVAE(pl.LightningModule):
     # Test step
     def test_step(self, batch, batch_idx):
         
-        x, mask = batch
+        if self.jet_features:
+            x, mask, _ = batch
+        else:
+            x, mask = batch 
 
         x_recon, commit_loss, _ = self(x, mask)
 

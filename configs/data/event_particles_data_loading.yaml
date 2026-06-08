@@ -29,3 +29,6 @@ puppiw_threshold: 0.05
 
 # Number of workers
 num_workers: 0
+
+# Alway False, it allows the model to distinguish from the jet-constituents data-loading
+jet_features: False

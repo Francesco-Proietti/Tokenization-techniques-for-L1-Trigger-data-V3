@@ -32,3 +32,6 @@ preprocessing: true
 
 # Number of workers
 num_workers: 0
+
+# Always True, it allows the model to manage this particular data-loading
+jet_features: True

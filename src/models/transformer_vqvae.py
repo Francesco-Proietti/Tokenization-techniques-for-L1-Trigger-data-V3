@@ -180,6 +180,7 @@ class TransformerVQVAE(pl.LightningModule):
         self.beta = cfg.beta
         self.rot_trick = cfg.rotation_trick
         self.lr = lr
+        self.jet_features = cfg.jet_features
         
         self.encoder = Transformer(
             input_dim=self.input_dim,
@@ -249,7 +250,10 @@ class TransformerVQVAE(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         
-        x, mask = batch
+        if self.jet_features:
+            x, mask, _ = batch
+        else:
+            x, mask = batch 
 
         x_recon, commit_loss, _ = self(x, mask)
 
@@ -275,7 +279,10 @@ class TransformerVQVAE(pl.LightningModule):
     # Validation Step
     def validation_step(self, batch, batch_idx):
 
-        x, mask = batch
+        if self.jet_features:
+            x, mask, _ = batch
+        else:
+            x, mask = batch 
 
         x_recon, commit_loss, _ = self(x, mask)
         
@@ -301,7 +308,10 @@ class TransformerVQVAE(pl.LightningModule):
     #Test step
     def test_step(self, batch, batch_idx):
         
-        x, mask = batch
+        if self.jet_features:
+            x, mask, _ = batch
+        else:
+            x, mask = batch 
 
         x_recon, commit_loss, _ = self(x, mask)
 
