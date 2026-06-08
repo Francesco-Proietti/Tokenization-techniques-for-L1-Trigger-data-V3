@@ -401,8 +401,8 @@ def main():
     cb_usage = len(torch.unique(torch.stack(idx))) / int(cb_size)
   
     # PT plot
-    plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original")
-    plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
+    plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original", log=True)
+    plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed", log=True)
     plt.xlabel("PT [GeV]")
     plt.ylabel("Density")
     plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
