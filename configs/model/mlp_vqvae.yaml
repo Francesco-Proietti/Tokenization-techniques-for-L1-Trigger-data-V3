@@ -33,3 +33,6 @@ encoder_hidden_dims:
 
 # Optional: dimensions of the decoder's hidden layers
 decoder_hidden_dims: 
+
+# True if you are working with jet-constituents-level data-loading, else False
+jet_features: True
