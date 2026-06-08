@@ -4,13 +4,13 @@
 name: jet_const
 
 # Path to the train folder
-train_path: "/run/media/francesco/STORAGE/data_cern/Train"
+train_path: "/run/media/francesco/STORAGE/data_cern_2/Train"
 
 # Path to the validation folder
-val_path: "/run/media/francesco/STORAGE/data_cern/Val"
+val_path: "/run/media/francesco/STORAGE/data_cern_2/Val"
 
 # Path to the test folder
-test_path: "/run/media/francesco/STORAGE/data_cern/Test"
+test_path: "/run/media/francesco/STORAGE/data_cern_2/Test"
 
 # Select the features
 features:
