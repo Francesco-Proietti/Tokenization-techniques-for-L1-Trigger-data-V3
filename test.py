@@ -428,8 +428,8 @@ def main():
     plt.show()
     
     # Codebook usage plot
-    plt.hist(idx, density=True, bins=50, color="orange")
-    plt.xlim(0, 512)
+    plt.hist(idx, density=True, bins=int(cb_size), color="orange")
+    plt.xlim(0, int(cb_size))
     plt.xlabel(f"Quantization indices (CB-usage={cb_usage})")
     plt.ylabel("Density")
     plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
