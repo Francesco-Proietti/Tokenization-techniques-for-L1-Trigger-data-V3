@@ -306,6 +306,16 @@ def main():
     pt_orig = []
     eta_orig = []
     phi_orig = []
+
+    # Will contain preprocessed original features
+    pt_orig_prep = []
+    eta_orig_prep = []
+    phi_orig_prep = []
+
+    # Will contain preprocessed reconstructed features
+    pt_reco_prep = []
+    eta_reco_prep = []
+    phi_reco_prep = []
     
     # Will contain reconstructed features
     pt_reco = []
@@ -360,7 +370,15 @@ def main():
             x, m = batch
 
             x = x.to(device)
-            m = m.to(device)        
+            m = m.to(device)    
+
+        pt_o_prep = x[:, :, 0]
+        eta_o_prep = x[:, :, 1]
+        phi_o_prep = x[:, :, 2]    
+
+        pt_orig_prep.extend(pt_o_prep[m].cpu())
+        eta_orig_prep.extend(eta_o_prep[m].cpu())
+        phi_orig_prep.extend(phi_o_prep[m].cpu())
 
         with torch.no_grad():
 
@@ -380,7 +398,15 @@ def main():
             eta_reco.extend(eta_r[m].cpu())
             phi_reco.extend(phi_r[m].cpu())
 
-            idx.extend(output[2].flatten().cpu())
+            pt_r_prep = output[0][:, :, 0]
+            eta_r_prep = output[0][:, :, 1]
+            phi_r_prep = output[0][:, :, 2]    
+
+            pt_reco_prep.extend(pt_r_prep[m].cpu())
+            eta_reco_prep.extend(eta_r_prep[m].cpu())
+            phi_reco_prep.extend(phi_r_prep[m].cpu())
+
+            idx.extend(output[2][m].cpu())
 
 
     ########################################
@@ -403,6 +429,30 @@ def main():
     # PT plot
     plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original", log=True)
     plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed", log=True)
+    plt.xlabel("PT [GeV]")
+    plt.ylabel("Density")
+    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
+    plt.legend()
+    plt.show()
+
+    # unisci i dati per calcolare bins comuni
+    all = np.concatenate([pt_orig, pt_reco])
+
+    # calcolo bins ottimali UNA SOLA VOLTA
+    bins = np.histogram_bin_edges(all, bins='fd')
+    
+    # PT plot no log scale
+    plt.hist(pt_orig, bins=bins, color="blue", label="Original", density=True)
+    plt.hist(pt_reco, bins=bins, histtype="step", color="red", label="Reconstructed", density=True)
+    plt.xlabel("PT [GeV]")
+    plt.ylabel("Density")
+    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
+    plt.legend()
+    plt.show()
+
+    # PT plot preprocessed
+    plt.hist(pt_orig_prep, density=True, bins=50, color="blue", label="Original")
+    plt.hist(pt_reco_prep, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
     plt.xlabel("PT [GeV]")
     plt.ylabel("Density")
     plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
