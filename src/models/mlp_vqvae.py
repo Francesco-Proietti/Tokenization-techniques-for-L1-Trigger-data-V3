@@ -144,7 +144,9 @@ class MLPVQVAE(pl.LightningModule):
             codebook_size=self.codebook_size,
             rotation_trick=self.rot_trick,
             commitment_weight=self.beta,
-            decay=self.decay
+            decay=self.decay,
+            kmeans_init=True,
+            kmeans_iters=10
         )
 
         self.decoder = MLPDecoder(

@@ -2,7 +2,7 @@
 
 defaults:
   # Select the model
-  - model: transformer_vqvae
+  - model: mlp_vqvae
   # Use the data default config
   - data: jet_constituents_data_loading
   # Use the trainer default config
