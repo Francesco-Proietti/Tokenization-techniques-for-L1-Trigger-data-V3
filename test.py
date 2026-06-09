@@ -113,6 +113,13 @@ def main():
     while dl not in ["1", "2", "3"]:
         dl = input("INVALID ENTRY! Enter the data loader number (1, 2, or 3): ")
 
+    if dl == "1":
+        path_data = "jet_const"
+    elif dl == "2":
+        path_data = "event_part"
+    elif dl == "3":
+        path_data = "event_jets"
+
     # Model selection-----------------------
     
     print("1) MLP-VQVAE")
@@ -123,9 +130,42 @@ def main():
     while mod not in ["1", "2"]:
         mod = input("INVALID ENTRY! Enter the model number (1 or 2): ")
 
+    if mod == "1":
+        path_model = "mlp"
+    elif mod == "2":
+        path_model = "transformer"
+    
+    # Rotation Trick for checkpoint's path--
+
+    print("1) False")
+    print("2) True")
+
+    r = input("Enter the Rotation Trick number (1 or 2): ")
+
+    while r not in ["1", "2"]:
+        r = input("INVALID ENTRY! Enter the Rotation Trick number (1 or 2): ")
+
+    if r == "1":
+        path_rot = "False"
+    elif r == "2":
+        path_rot = "True"
+
+    # CB size for checkpoint's path---------
+
+    print("1) 512")
+
+    cb = input("Enter the codebook size number (1): ")
+
+    while cb not in ["1"]:
+        cb = input("INVALID ENTRY! Enter the model number (1): ")
+
+    if cb == "1":
+        path_cb = "512"
+
     # Checkpoint selection------------------
 
-    checkpoint = input("Enter the complete checkpoint's path: ")
+    checkpoint = input("Enter the checkpoint's name: ")
+    checkpoint = f"checkpoints/{path_model}-{path_data}-{path_rot}-{path_cb}/" + checkpoint
 
     path = Path(checkpoint)
 
@@ -282,8 +322,7 @@ def main():
     #                                      #
     #            MODEL SELECTION           #
     #                                      #
-    ########################################
-    
+    ########################################    
 
     # MLP-VQVAE-----------------------------
 
@@ -390,7 +429,7 @@ def main():
     ########################################
 
     print("Plotting...")
-    
+
     # Hyperparameters
     ckpt = torch.load(path, weights_only=False)
     model_name = str(ckpt["hyper_parameters"]["cfg"]["name"])
@@ -403,6 +442,15 @@ def main():
     # PT plot
     plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original", log=True)
     plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed", log=True)
+    plt.xlabel("PT [GeV]")
+    plt.ylabel("Density")
+    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
+    plt.legend()
+    plt.show()
+
+    # PT plot no log scale
+    plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original")
+    plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
     plt.xlabel("PT [GeV]")
     plt.ylabel("Density")
     plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
