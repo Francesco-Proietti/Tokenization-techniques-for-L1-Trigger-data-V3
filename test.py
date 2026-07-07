@@ -62,10 +62,14 @@ def inverse_preprocessing(
     # Eta inverse
     eta = out[:, :, 1] * 3.0
     
-    # Phi inverse
-    phi = out[:, :, 2] * 3.0
-    # wrap phi to [-pi, pi]
-    phi = (phi + np.pi) % (2 * np.pi) - np.pi
+    if jet_feats is None:
+        # Phi inverse
+        phi_sin = out[:, :, 2]
+        phi_cos = out[:, :, 3]
+
+        phi = torch.atan2(phi_sin,phi_cos)
+    else:
+        phi = out[:, :, 2] * 3.0
     
     # If Jet-Constituents-Level, recover absolute eta and phi
     if jet_feats is not None:
@@ -75,6 +79,9 @@ def inverse_preprocessing(
         
         eta += jet_eta[:, None]
         phi += jet_phi[:, None]
+
+        # wrap phi to [-pi, pi]
+        phi = (phi + np.pi) % (2 * np.pi) - np.pi
 
     # Stack
     recovered = torch.stack([pt, eta, phi], dim=-1)
@@ -151,16 +158,22 @@ def main():
         path_rot = "True"
 
     # CB size for checkpoint's path---------
+    
+    print("1) 256")
+    print("2) 512")
+    print("3) 1024")
 
-    print("1) 512")
+    cb = input("Enter the codebook size number (1, 2 or 3): ")
 
-    cb = input("Enter the codebook size number (1): ")
-
-    while cb not in ["1"]:
-        cb = input("INVALID ENTRY! Enter the model number (1): ")
+    while cb not in ["1", "2", "3"]:
+        cb = input("INVALID ENTRY! Enter the model number (1, 2 or 3): ")
 
     if cb == "1":
+        path_cb = "256"
+    elif cb == "2":
         path_cb = "512"
+    elif cb == "3":
+        path_cb = "1024"
 
     # Checkpoint selection------------------
 
@@ -181,7 +194,7 @@ def main():
     if dl == "1":
         # Dataset not preprocessed 
         dataset_not_prep = JetConstL1TriggerDataset(
-            parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
+            parquet_dirs="/run/media/francesco/STORAGE/data_cern_2/Test",
             max_particles=128,
             features=["L1T_PUPPIPart_PT",
                     "L1T_PUPPIPart_Eta",
@@ -198,7 +211,7 @@ def main():
 
         # Dataset preprocessed
         dataset_prep = JetConstL1TriggerDataset(
-            parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
+            parquet_dirs="/run/media/francesco/STORAGE/data_cern_2/Test",
             max_particles=128,
             features=["L1T_PUPPIPart_PT",
                     "L1T_PUPPIPart_Eta",
@@ -235,7 +248,7 @@ def main():
     
         # Dataset not preprocessed 
         dataset_not_prep = EventPartL1TriggerDataset(
-            parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
+            parquet_dirs="/run/media/francesco/STORAGE/data_cern_2/Test",
             max_particles=128,
             features=["L1T_PUPPIPart_PT",
                     "L1T_PUPPIPart_Eta",
@@ -248,7 +261,7 @@ def main():
 
         # Dataset preprocessed 
         dataset_prep = EventPartL1TriggerDataset(
-            parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
+            parquet_dirs="/run/media/francesco/STORAGE/data_cern_2/Test",
             max_particles=128,
             features=["L1T_PUPPIPart_PT",
                     "L1T_PUPPIPart_Eta",
@@ -281,22 +294,22 @@ def main():
     
         # Dataset not preprocessed 
         dataset_not_prep = EventJetsL1TriggerDataset(
-            parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
-            max_particles=128,
+            parquet_dirs="/run/media/francesco/STORAGE/data_cern_2/Test",
+            max_jets=16,
             features=["L1T_JetPuppiAK4_PT",
                     "L1T_JetPuppiAK4_Eta",
-                    "L1T_jetPuppiAK4_Phi",
+                    "L1T_JetPuppiAK4_Phi",
             ],
             preprocessing=False
         )
 
         # Dataset preprocessed 
         dataset_prep = EventJetsL1TriggerDataset(
-            parquet_dirs="/run/media/francesco/STORAGE/data_cern/Test",
-            max_particles=16,
+            parquet_dirs="/run/media/francesco/STORAGE/data_cern_2/Test",
+            max_jets=16,
             features=["L1T_JetPuppiAK4_PT",
                     "L1T_JetPuppiAK4_Eta",
-                    "L1T_jetPuppiAK4_Phi",
+                    "L1T_JetPuppiAK4_Phi",
             ],
             preprocessing=True
         )
@@ -419,7 +432,8 @@ def main():
             eta_reco.extend(eta_r[m].cpu())
             phi_reco.extend(phi_r[m].cpu())
 
-            idx.extend(output[2].flatten().cpu())
+            #idx.extend(output[2].flatten().cpu())
+            idx.extend(output[2][m].cpu())
 
 
     ########################################
@@ -438,49 +452,68 @@ def main():
     
     # Codebook usage
     cb_usage = len(torch.unique(torch.stack(idx))) / int(cb_size)
-  
-    # PT plot
-    plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original", log=True)
-    plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed", log=True)
-    plt.xlabel("PT [GeV]")
-    plt.ylabel("Density")
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
-    plt.legend()
-    plt.show()
+    
+    # pT bins
+    bins = np.histogram_bin_edges(np.concatenate([pt_orig, pt_reco]), bins=50)
+    
+    # Initialize the multiplots figure
+    fig, ax = plt.subplots(2, 3, figsize=(12, 8))
 
-    # PT plot no log scale
-    plt.hist(pt_orig, density=True, bins=50, color="blue", label="Original")
-    plt.hist(pt_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
-    plt.xlabel("PT [GeV]")
-    plt.ylabel("Density")
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
-    plt.legend()
-    plt.show()
+    # PT plot on log scale
+    ax[0,0].hist(pt_orig, density=True, bins=bins, color="orange", label="Original", log=True, alpha=0.7)
+    ax[0,0].hist(pt_reco, density=True, bins=bins, histtype="step", color="purple", label="Reconstructed", log=True)
+    ax[0,0].set_xlabel(r"$p_T$ [GeV]")
+    ax[0,0].set_ylabel("Density")
+    ax[0,0].set_title(r"Distribution of $p_T$ [GeV] on log scale")
+    ax[0,0].legend()
     
     # Eta plot
-    plt.hist(eta_orig, density=True, bins=50, color="blue", label="Original")
-    plt.hist(eta_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
-    plt.xlabel("Eta")
-    plt.ylabel("Density")
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
-    plt.legend()
-    plt.show()
+    ax[0,1].hist(eta_orig, density=True, bins=50, color="red", label="Original", alpha=0.7)
+    ax[0,1].hist(eta_reco, density=True, bins=50, histtype="step", color="purple", label="Reconstructed")
+    ax[0,1].set_xlabel(r"$\eta$")
+    ax[0,1].set_ylabel("Density")
+    ax[0,1].set_title(r"Distribution of $\eta$")
+    ax[0,1].legend()
     
     # Phi plot
-    plt.hist(phi_orig, density=True, bins=50, color="blue", label="Original")
-    plt.hist(phi_reco, density=True, bins=50, histtype="step", color="red", label="Reconstructed")
-    plt.xlabel("Phi")
-    plt.ylabel("Density")
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
-    plt.legend()
-    plt.show()
+    ax[0,2].hist(phi_orig, density=True, bins=50, color="blue", label="Original", alpha=0.7)
+    ax[0,2].hist(phi_reco, density=True, bins=50, histtype="step", color="purple", label="Reconstructed")
+    ax[0,2].set_xlabel(r"$\phi$")
+    ax[0,2].set_ylabel("Density")
+    ax[0,2].set_title(r"Distribution of $\phi$")
+    ax[0,2].legend()
+
+    # PT plot no log scale
+    ax[1,0].hist(pt_orig, density=True, bins=bins, color="orange", label="Original", alpha=0.7)
+    ax[1,0].hist(pt_reco, density=True, bins=bins, histtype="step", color="purple", label="Reconstructed")
+    ax[1,0].set_xlabel(r"$p_T$ [GeV]")
+    ax[1,0].set_ylabel("Density")
+    ax[1,0].set_title(r"Distribution of $p_T$ [GeV]")
+    ax[1,0].legend()
+
+    # PT plot (cut on x axis)
+    p99 = np.percentile(np.array(pt_orig), 99) + 10
+    min = np.min(np.array(pt_orig)) - 5
+
+    ax[1,2].hist(pt_orig, density=True, bins=bins, color="orange", label="Original", alpha=0.7)
+    ax[1,2].hist(pt_reco, density=True, bins=bins, histtype="step", color="purple", label="Reconstructed")
+    ax[1,2].set_xlabel(r"$p_T$ [GeV]")
+    ax[1,2].set_ylabel("Density")
+    ax[1,2].set_xlim(min, p99)
+    ax[1,2].set_title(r"Distribution of $p_T$ [GeV] (cut on x axis)")
+    ax[1,2].legend()
     
     # Codebook usage plot
-    plt.hist(idx, density=True, bins=int(cb_size), color="orange")
-    plt.xlim(0, int(cb_size))
-    plt.xlabel(f"Quantization indices (CB-usage={cb_usage})")
-    plt.ylabel("Density")
-    plt.title(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
+    ax[1,1].hist(idx, density=True, bins=int(cb_size), color="brown", alpha=0.9)
+    ax[1,1].set_xlim(0, int(cb_size))
+    ax[1,1].set_xlabel(f"Quantization index (CB-usage={cb_usage})")
+    ax[1,1].set_ylabel("Density")
+    ax[1,1].set_title("Distribution of the quantization indices")
+
+    #ax[1, 2].axis('off')
+    
+    plt.suptitle(model_name + " VQ-VAE, CB_size: " + cb_size + ", Rotation_trick: " + rot)
+    plt.tight_layout()
     plt.show()
 
     print("Done!")

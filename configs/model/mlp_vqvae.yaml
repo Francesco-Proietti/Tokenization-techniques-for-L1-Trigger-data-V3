@@ -3,7 +3,7 @@
 # Name of the model
 name: mlp
 
-# Input dimension
+# Input dimension (if jet-constituents-level 3, else 4)
 input_dim: 3
 
 # Hidden dimensions (one for each hidden layer)
@@ -23,7 +23,7 @@ codebook_size: 512
 rotation_trick: True
 
 # Decay (VQ layer)
-decay: 0.95
+decay: 0.8
 
 # Commitment weight
 beta: 0.9

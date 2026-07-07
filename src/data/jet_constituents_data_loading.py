@@ -12,6 +12,7 @@ import pyarrow.dataset as ds
 import torch
 from torch.utils.data import IterableDataset, get_worker_info
 import lightning as pl
+import random
 
 
 class JetConstL1TriggerDataset(IterableDataset):
@@ -27,7 +28,8 @@ class JetConstL1TriggerDataset(IterableDataset):
         parquet_dirs: List[str],
         max_particles: int = 128,
         features: List[str] = ["L1T_PUPPIPart_PT", "L1T_PUPPIPart_Eta", "L1T_PUPPIPart_Phi", "L1T_PUPPIPart_PuppiW"],
-        preprocessing: bool = True
+        preprocessing: bool = True,
+        shuffling: bool = False
     ):
         """
         Initialize the dataset.
@@ -45,6 +47,7 @@ class JetConstL1TriggerDataset(IterableDataset):
         self.features = features
         self.kin_coord_num = 3
         self.preprocessing = preprocessing
+        self.shuffling = shuffling
 
     def _process_event(self, row: pd.Series) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -122,6 +125,8 @@ class JetConstL1TriggerDataset(IterableDataset):
         worker_info = get_worker_info()
 
         files = self.dataset.files
+        if self.shuffling:
+            random.shuffle(files)
 
         if worker_info is None:
             assigned_files = files
@@ -135,12 +140,36 @@ class JetConstL1TriggerDataset(IterableDataset):
             use_threads=True,
         )
 
+        buffer = []
+        buffer_size = 5000
+
         for batch in scanner.to_batches():
             df = batch.to_pandas()
 
             for i in range(len(df)):
-                for data in self._process_event(df.iloc[i]):
-                    yield data
+
+                event = df.iloc[i]
+
+                if len(event["L1T_JetPuppiAK4_ConstituentsIdx"]) == 0:
+                    continue
+
+                if self.shuffling:
+                    buffer.append(event)
+
+                    if len(buffer) >= buffer_size:
+                        idx = random.randint(0, len(buffer)-1)
+                        for data in self._process_event(buffer.pop(idx)):
+                            yield data
+                else:
+                    for data in self._process_event(df.iloc[i]):
+                        yield data
+
+        if self.shuffling:        
+            # Remaining events in buffer
+            while buffer:
+                idx = random.randint(0, len(buffer)-1)
+                for data in self._process_event(buffer.pop(idx)):
+                    yield data                 
 
 
 class JetConstL1TriggerDataModule(pl.LightningDataModule):
@@ -183,7 +212,8 @@ class JetConstL1TriggerDataModule(pl.LightningDataModule):
             parquet_dirs=self.train_dirs,
             max_particles=self.max_particles,
             features=self.features,
-            preprocessing=self.preprocessing
+            preprocessing=self.preprocessing,
+            shuffling=True
         )
         return torch.utils.data.DataLoader(
             self.train_dataset,

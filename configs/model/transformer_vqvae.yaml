@@ -3,8 +3,8 @@
 # Name of the model
 name: transformer
 
-# Input dimension
-input_dim: 3
+# Input dimension (3 if jet-constituents-level, else 4)
+input_dim: 4
 
 # First projection
 hidden_dim: 128
@@ -16,7 +16,7 @@ n_heads: 8
 dropout: 0.1
 
 # Number of NormFormerBlocks
-depth: 4
+depth: 3
 
 # Latent dimension (dimension of the codebook vectors)
 latent_dim: 4
@@ -26,7 +26,7 @@ codebook_size: 512
 
 # Set the rotation trick (True/False)
 # (If False the model uses STE)
-rotation_trick: True
+rotation_trick: False
 
 # Decay (VQ layer)
 decay: 0.8
@@ -35,5 +35,5 @@ decay: 0.8
 beta: 0.9
 
 # True if you are working with jet-constituents-level data-loading, else False
-jet_features: True
+jet_features: False
 

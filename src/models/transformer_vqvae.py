@@ -195,7 +195,7 @@ class TransformerVQVAE(pl.LightningModule):
             codebook_size=self.codebook_size,
             decay=self.decay,
             commitment_weight=self.beta,
-            rotation_trick=self.rot_trick,
+            rotation_trick=self.rot_trick
         )
         
         self.decoder = Transformer(
@@ -224,27 +224,27 @@ class TransformerVQVAE(pl.LightningModule):
         
         z_e = self.encoder(x, mask)
 
-        flat_mask = mask.view(-1)
+        #flat_mask = mask.view(-1)
 
-        flat_z_e = z_e.view(-1, self.latent_dim)
+        #flat_z_e = z_e.view(-1, self.latent_dim)
 
-        valid_z_e = flat_z_e[flat_mask]
+        #valid_z_e = flat_z_e[flat_mask]
 
-        valid_z_e_3d = valid_z_e.unsqueeze(0)
+        #valid_z_e_3d = valid_z_e.unsqueeze(0)
 
-        z_q, indices, commit_loss = self.quantizer(valid_z_e_3d)
+        z_q, indices, commit_loss = self.quantizer(z_e, mask=mask)
 
-        z_q_valid = z_q.squeeze(0)
+        #z_q_valid = z_q.squeeze(0)
 
-        z_q_padded = torch.zeros_like(flat_z_e)
+        #z_q_padded = torch.zeros_like(flat_z_e)
 
-        z_q_padded[flat_mask] = z_q_valid
+        #z_q_padded[flat_mask] = z_q_valid
 
-        z_q = z_q_padded.view(B, N, -1)
+        #z_q = z_q_padded.view(B, N, -1)
         
         x_recon = self.decoder(z_q, mask)
 
-        x_recon = x_recon * mask.unsqueeze(-1)
+        #x_recon = x_recon * mask.unsqueeze(-1)
 
         return x_recon, commit_loss, indices
 
@@ -256,7 +256,7 @@ class TransformerVQVAE(pl.LightningModule):
             x, mask = batch 
 
         x_recon, commit_loss, _ = self(x, mask)
-
+        
         # Reconstruction loss
         recon_loss = (x - x_recon) ** 2
         
@@ -269,7 +269,7 @@ class TransformerVQVAE(pl.LightningModule):
 
         # Total loss
         loss = recon_loss + 10 * commit_loss
-
+       
         self.log("train_loss", loss, prog_bar=True)
         self.log("train_recon_loss", recon_loss, prog_bar=True)
         self.log("train_commit_loss", commit_loss, prog_bar=True)

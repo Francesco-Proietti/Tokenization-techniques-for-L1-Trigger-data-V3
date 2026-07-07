@@ -22,7 +22,7 @@ features:
 max_jets: 16
 
 # Set the preprocessing (True/False)
-preprocessing: true
+preprocessing: True
 
 # Number of workers
 num_workers: 0

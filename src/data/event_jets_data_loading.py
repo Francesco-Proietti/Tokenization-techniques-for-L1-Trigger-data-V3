@@ -12,6 +12,7 @@ import pyarrow.dataset as ds
 import torch
 from torch.utils.data import IterableDataset, get_worker_info
 import lightning as pl
+import random
 
 
 class EventJetsL1TriggerDataset(IterableDataset):
@@ -27,7 +28,8 @@ class EventJetsL1TriggerDataset(IterableDataset):
         parquet_dirs: List[str],
         max_jets: int = 8,
         features: List[str] = ["L1T_JetPuppiAK4_PT", "L1T_JetPuppiAK4_Eta", "L1T_JetPuppiAK4_Phi"],
-        preprocessing: bool = True
+        preprocessing: bool = True,
+        shuffling: bool = False
     ):
         """
         Initialize the dataset.
@@ -44,6 +46,7 @@ class EventJetsL1TriggerDataset(IterableDataset):
         self.max_jets = max_jets
         self.features = features
         self.preprocessing = preprocessing
+        self.shuffling = shuffling
 
     def _process_event(self, row: pd.Series) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -54,29 +57,37 @@ class EventJetsL1TriggerDataset(IterableDataset):
             mask: [max_jets] boolean tensor
         """
         n_feats = len(self.features)
+
+        pt = np.array(row["L1T_JetPuppiAK4_PT"])
+        eta = np.array(row["L1T_JetPuppiAK4_Eta"])
+        phi = np.array(row["L1T_JetPuppiAK4_Phi"])
+
         feats = np.zeros((self.max_jets, n_feats), dtype=np.float32)
         mask = np.zeros(self.max_jets, dtype=bool)
+
+        n_jets = min(len(pt), self.max_jets)
+
+        feats[:n_jets, 0] = pt[:n_jets]
+        feats[:n_jets, 1] = eta[:n_jets]
+        feats[:n_jets, 2] = phi[:n_jets]
+
+        mask[:n_jets] = True
 
         # Preprocessing 
         if self.preprocessing:
             
-            pt = np.array(row["L1T_JetPuppiAK4_PT"])
-            eta = np.array(row["L1T_JetPuppiAK4_Eta"])
-            phi = np.array(row["L1T_JetPuppiAK4_Phi"])
             pt = np.log(pt + 1e-8) - 1.8  
             eta = eta / 3
-            phi = phi / np.pi
-            row["L1T_JetPuppiAK4_PT"] = pt
-            row["L1T_JetPuppiAK4_Eta"] = eta
-            row["L1T_JetPuppiAK4_Phi"] = phi
+            phi_sin = np.sin(phi)
+            phi_cos = np.cos(phi)   
+            
+            feats = np.zeros((self.max_jets, n_feats + 1), dtype=np.float32)
 
-        # Padding
-        for feat_idx, feat_name in enumerate(self.features):
-            jets_feat = row[feat_name]
-            n_jets = min(len(jets_feat), self.max_jets)
-            feats[:n_jets, feat_idx] = jets_feat[:n_jets]
-            mask[:n_jets] = True
-        
+            feats[:n_jets, 0] = pt[:n_jets]
+            feats[:n_jets, 1] = eta[:n_jets]
+            feats[:n_jets, 2] = phi_sin[:n_jets]   
+            feats[:n_jets, 3] = phi_cos[:n_jets]     
+
         return torch.FloatTensor(feats), torch.BoolTensor(mask)
 
     def __iter__(self) -> Iterator[Tuple]:
@@ -87,6 +98,8 @@ class EventJetsL1TriggerDataset(IterableDataset):
         worker_info = get_worker_info()
 
         files = self.dataset.files
+        if self.shuffling:
+            random.shuffle(files)
 
         if worker_info is None:
             assigned_files = files
@@ -99,12 +112,35 @@ class EventJetsL1TriggerDataset(IterableDataset):
             columns=self.features,
             use_threads=True,
         )
+        
+        buffer = []
+        buffer_size = 5000
 
         for batch in scanner.to_batches():
             df = batch.to_pandas()
 
             for i in range(len(df)):
-                yield self._process_event(df.iloc[i])
+                
+                event = df.iloc[i]
+
+                if len(df.iloc[i]["L1T_JetPuppiAK4_PT"]) == 0:
+                    continue
+
+                if self.shuffling:
+                    buffer.append(event)
+
+                    if len(buffer) >= buffer_size:
+                        idx = random.randint(0, len(buffer)-1)
+                        yield self._process_event(buffer.pop(idx))
+
+                else:
+                    yield self._process_event(df.iloc[i])
+
+        if self.shuffling:        
+            # Remaining events in buffer
+            while buffer:
+                idx = random.randint(0, len(buffer)-1)
+                yield self._process_event(buffer.pop(idx))
 
 
 class EventJetsL1TriggerDataModule(pl.LightningDataModule):
@@ -147,7 +183,8 @@ class EventJetsL1TriggerDataModule(pl.LightningDataModule):
             parquet_dirs=self.train_dirs,
             max_jets=self.max_jets,
             features=self.features,
-            preprocessing=self.preprocessing
+            preprocessing=self.preprocessing,
+            shuffling=True
         )
         return torch.utils.data.DataLoader(
             self.train_dataset,

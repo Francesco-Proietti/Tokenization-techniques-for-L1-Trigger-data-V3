@@ -12,6 +12,8 @@ import pyarrow.dataset as ds
 import torch
 from torch.utils.data import IterableDataset, get_worker_info
 import lightning as pl
+import random
+from collections import deque
 
 
 class EventPartL1TriggerDataset(IterableDataset):
@@ -28,7 +30,8 @@ class EventPartL1TriggerDataset(IterableDataset):
         max_particles: int = 128,
         features: List[str] = ["L1T_PUPPIPart_PT", "L1T_PUPPIPart_Eta", "L1T_PUPPIPart_Phi", "L1T_PUPPIPart_PuppiW"],
         puppiw_threshold: float = 0.05,
-        preprocessing: bool = True
+        preprocessing: bool = True,
+        shuffling: bool = False
     ):
         """
         Initialize the dataset.
@@ -39,6 +42,7 @@ class EventPartL1TriggerDataset(IterableDataset):
             features: List of feature to extract.
             puppiw_threshold: Minimum PUPPI weight for particles.
             preprocessing: Whether to apply preprocessing.
+            shuffling: Whether to shuffle the data.
         """
         super().__init__()
 
@@ -48,6 +52,7 @@ class EventPartL1TriggerDataset(IterableDataset):
         self.coords = features[:-1] #Exclude PuppiW from coordinates
         self.puppiw_threshold = puppiw_threshold
         self.preprocessing = preprocessing
+        self.shuffling = shuffling
 
     def _process_event(self, row: pd.Series) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -58,33 +63,40 @@ class EventPartL1TriggerDataset(IterableDataset):
             mask: [max_particles] boolean tensor
         """
         n_coords = len(self.coords)
+
         feats = np.zeros((self.max_particles, n_coords), dtype=np.float32)
         mask = np.zeros(self.max_particles, dtype=bool)
 
         # Apply puppiw filter
         puppiw = row["L1T_PUPPIPart_PuppiW"]
         valid_mask = np.array(puppiw) >= self.puppiw_threshold
+        
+        pt = np.array(row["L1T_PUPPIPart_PT"])[valid_mask]
+        eta = np.array(row["L1T_PUPPIPart_Eta"])[valid_mask]
+        phi = np.array(row["L1T_PUPPIPart_Phi"])[valid_mask]
+
+        n_particles = min(len(pt), self.max_particles)
+
+        feats[:n_particles, 0] = pt[:n_particles]
+        feats[:n_particles, 1] = eta[:n_particles]
+        feats[:n_particles, 2] = phi[:n_particles]
+
+        mask[:n_particles] = True
 
         # Preprocessing 
         if self.preprocessing:
             
-            pt = np.array(row["L1T_PUPPIPart_PT"])
-            eta = np.array(row["L1T_PUPPIPart_Eta"])
-            phi = np.array(row["L1T_PUPPIPart_Phi"])
             pt = np.log(pt + 1e-8) - 1.8  
             eta = eta / 3
-            phi = phi / np.pi
-            row["L1T_PUPPIPart_PT"] = pt
-            row["L1T_PUPPIPart_Eta"] = eta
-            row["L1T_PUPPIPart_Phi"] = phi
+            phi_sin = np.sin(phi)
+            phi_cos = np.cos(phi)
 
-        # Filter particles
-        for feat_idx, feat_name in enumerate(self.coords):
-            particles_feat = row[feat_name]
-            particles_feat = np.array(particles_feat)[valid_mask]
-            n_particles = min(len(particles_feat), self.max_particles)
-            feats[:n_particles, feat_idx] = particles_feat[:n_particles]
-            mask[:n_particles] = True
+            feats = np.zeros((self.max_particles, n_coords + 1), dtype=np.float32)
+            
+            feats[:n_particles, 0] = pt[:n_particles]
+            feats[:n_particles, 1] = eta[:n_particles]
+            feats[:n_particles, 2] = phi_sin[:n_particles]   
+            feats[:n_particles, 3] = phi_cos[:n_particles]
         
         return torch.FloatTensor(feats), torch.BoolTensor(mask)
 
@@ -95,7 +107,9 @@ class EventPartL1TriggerDataset(IterableDataset):
 
         worker_info = get_worker_info()
 
-        files = self.dataset.files
+        files = list(self.dataset.files) 
+        if self.shuffling:
+            random.shuffle(files)  
 
         if worker_info is None:
             assigned_files = files
@@ -109,11 +123,40 @@ class EventPartL1TriggerDataset(IterableDataset):
             use_threads=True,
         )
 
+        buffer = [] 
+        buffer_size = 5000 
+
         for batch in scanner.to_batches():
             df = batch.to_pandas()
 
             for i in range(len(df)):
-                yield self._process_event(df.iloc[i])
+
+                event = df.iloc[i] 
+
+                puppiw = df.iloc[i]["L1T_PUPPIPart_PuppiW"]
+                valid_mask = np.array(puppiw) >= self.puppiw_threshold
+                pt = np.array(df.iloc[i]["L1T_PUPPIPart_PT"])[valid_mask]
+
+                #if len(pt) > 0:
+                #    yield self._process_event(df.iloc[i])
+
+                if len(pt) == 0:
+                    continue
+                
+                if self.shuffling:
+                    buffer.append(event) 
+                
+                    if len(buffer) >= buffer_size:
+                        idx = random.randint(0, len(buffer)-1)
+                        yield self._process_event(buffer.pop(idx))
+                else:
+                    yield self._process_event(event)
+
+        if self.shuffling:        
+            # Remaining events in buffer
+            while buffer:
+                idx = random.randint(0, len(buffer)-1)
+                yield self._process_event(buffer.pop(idx))
 
 
 class EventPartL1TriggerDataModule(pl.LightningDataModule):
@@ -158,7 +201,8 @@ class EventPartL1TriggerDataModule(pl.LightningDataModule):
             max_particles=self.max_particles,
             features=self.features,
             puppiw_threshold=self.puppiw_threshold,
-            preprocessing=self.preprocessing
+            preprocessing=self.preprocessing,
+            shuffling=True
         )
         return torch.utils.data.DataLoader(
             self.train_dataset,

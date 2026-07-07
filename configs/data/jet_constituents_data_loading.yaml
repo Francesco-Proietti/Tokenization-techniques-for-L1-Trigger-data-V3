@@ -28,7 +28,7 @@ features:
 max_particles: 128
 
 # Set the preprocessing (True/False)
-preprocessing: true
+preprocessing: True
 
 # Number of workers
 num_workers: 0

@@ -144,7 +144,9 @@ class MLPVQVAE(pl.LightningModule):
             codebook_size=self.codebook_size,
             rotation_trick=self.rot_trick,
             commitment_weight=self.beta,
-            decay=self.decay
+            decay=self.decay,
+            kmeans_init=True,
+            kmeans_iters=10
         )
 
         self.decoder = MLPDecoder(
@@ -170,31 +172,31 @@ class MLPVQVAE(pl.LightningModule):
 
         # Encode
         z_e = self.encoder(x)
-
-        # Flatten mask
-        flat_mask = mask.view(-1) # [B*N]
-
-        flat_z_e = z_e.view(-1, self.latent_dim) # [B*N, latent_dim]
         
-        valid_z_e = flat_z_e[flat_mask]
+        # Flatten mask
+        #flat_mask = mask.view(-1) # [B*N]
 
-        valid_z_e_3d = valid_z_e.unsqueeze(0) 
+        #flat_z_e = z_e.view(-1, self.latent_dim) # [B*N, latent_dim]
+        
+        #valid_z_e = flat_z_e[flat_mask]
+
+        #valid_z_e_3d = valid_z_e.unsqueeze(0) 
 
         # Quantize
-        z_q, indices, commit_loss = self.quantizer(valid_z_e_3d)
+        z_q, indices, commit_loss = self.quantizer(z_e, mask=mask)
 
-        z_q_valid = z_q.squeeze(0) 
+        #z_q_valid = z_q.squeeze(0) 
 
-        z_q_padded = torch.zeros_like(flat_z_e)
+        #z_q_padded = torch.zeros_like(flat_z_e)
 
-        z_q_padded[flat_mask] = z_q_valid
+        #z_q_padded[flat_mask] = z_q_valid
 
-        z_q = z_q_padded.view(B, N, -1)
-
-        # Decode
+        #z_q = z_q_padded.view(B, N, -1)
+        
+        # Decode 
         x_recon = self.decoder(z_q) 
 
-        x_recon = x_recon * mask.unsqueeze(-1)
+        #x_recon = x_recon * mask.unsqueeze(-1)
 
         return x_recon, commit_loss, indices
         
