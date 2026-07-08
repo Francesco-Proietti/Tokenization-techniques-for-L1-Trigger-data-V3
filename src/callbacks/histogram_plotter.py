@@ -15,6 +15,8 @@ class HistogramPlotter(pl.Callback):
         self,
         data_loading: str,
         cb_size: int,
+        model_name: str,
+        rotation: str,
         output_dir: str = "validation_plots",
         log_every_n_epochs: int = 1,
         max_samples: Optional[int] = None,
@@ -22,11 +24,15 @@ class HistogramPlotter(pl.Callback):
         """
         Args:
             data_loading: String indicating the type of data loading used
+            model_name: Name of the model being trained
+            rotation: String indicating if thr rotation trick is used
             output_dir: Directory to save plots
             log_every_n_epochs: How often to generate plots
             max_samples: Maximum number of samples to use for plotting (for memory efficiency)
         """
         self.data_loading = data_loading
+        self.model_name = model_name
+        self.rotation = rotation
         self.output_dir = output_dir
         self.log_every_n_epochs = log_every_n_epochs
         self.max_samples = max_samples
@@ -170,7 +176,7 @@ class HistogramPlotter(pl.Callback):
             ax_pre.set_ylabel('Density')
             ax_pre.legend()
 
-        fig.suptitle(f'Validation Epoch {epoch} - Feature Distributions')
+        fig.suptitle(f'Validation Epoch {epoch} - {self.model_name}-VQVAE-rot:{self.rotation}-cb:{self.cb_size}')
         fig.tight_layout()
 
         return fig
@@ -189,9 +195,9 @@ class HistogramPlotter(pl.Callback):
         ax.hist(idx.numpy(), density=True, bins=bins, color="brown", alpha=0.8)
         ax.set_xlim(-0.5, self.cb_size - 0.5)
         ax.set_xlabel(f"Quantization index (CB-usage={cb_usage})")
-        ax.set_ylabel("Density")
-        ax.set_title("Distribution of the quantization indices")
-        
+        ax.set_ylabel("Density")        
+
+        fig.suptitle(f'Validation Epoch {epoch} - {self.model_name}-VQVAE-rot:{self.rotation}-cb:{self.cb_size}')
         fig.tight_layout()
 
         return fig

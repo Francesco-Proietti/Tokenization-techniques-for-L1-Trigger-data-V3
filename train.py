@@ -58,6 +58,8 @@ def main(cfg: DictConfig):
     histogram_callback = HistogramPlotter(
         data_loading=cfg.data.name,
         cb_size=cfg.model.codebook_size,
+        model_name=cfg.model.name,
+        rotation=cfg.model.rotation_trick,
         output_dir=f"{cfg.paths.logs_dir}/{cfg.experiment.name}/version_{logger.version}/validation_plots",
         log_every_n_epochs=1,  # Plot every epoch
         #max_samples=1000  # Optional: limit for memory
