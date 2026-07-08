@@ -16,17 +16,17 @@ n_heads: 8
 dropout: 0.1
 
 # Number of NormFormerBlocks
-depth: 3
+depth: 4
 
 # Latent dimension (dimension of the codebook vectors)
-latent_dim: 4
+latent_dim: 8
 
 # Codebook size (how many codebook vectors)
 codebook_size: 512
 
 # Set the rotation trick (True/False)
 # (If False the model uses STE)
-rotation_trick: False
+rotation_trick: True
 
 # Decay (VQ layer)
 decay: 0.8

@@ -303,6 +303,8 @@ class TransformerVQVAE(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_recon_loss", recon_loss, prog_bar=True)
         self.log("val_commit_loss", commit_loss, prog_bar=True)
+
+        return x_recon
     
 
     #Test step

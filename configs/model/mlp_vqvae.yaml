@@ -4,7 +4,7 @@
 name: mlp
 
 # Input dimension (if jet-constituents-level 3, else 4)
-input_dim: 3
+input_dim: 4
 
 # Hidden dimensions (one for each hidden layer)
 hidden_dims: 
@@ -35,4 +35,4 @@ encoder_hidden_dims:
 decoder_hidden_dims: 
 
 # True if you are working with jet-constituents-level data-loading, else False
-jet_features: True
+jet_features: False

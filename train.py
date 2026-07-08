@@ -10,6 +10,7 @@ import torch
 
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
+from src.callbacks.histogram_plotter import HistogramPlotter
 
 # Import model and data registries
 from src.models.model_registry import MODEL_REGISTRY
@@ -53,6 +54,14 @@ def main(cfg: DictConfig):
         save_last=True
     )
 
+    # Add histogram plotter callback
+    histogram_callback = HistogramPlotter(
+        data_loading=cfg.data.name,
+        output_dir=f"{cfg.paths.logs_dir}/{cfg.experiment.name}/version_{logger.version}/validation_plots",
+        log_every_n_epochs=1,  # Plot every epoch
+        #max_samples=1000  # Optional: limit for memory
+    )
+
     # Trainer
     trainer = pl.Trainer(
         max_epochs=cfg.trainer.max_epochs,
@@ -60,7 +69,7 @@ def main(cfg: DictConfig):
         devices=cfg.trainer.devices,
         log_every_n_steps=cfg.trainer.log_every_n_steps,
         logger=logger,
-        callbacks=[checkpoint_callback]
+        callbacks=[checkpoint_callback, histogram_callback]
     )
     
     # Training

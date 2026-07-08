@@ -4,10 +4,10 @@
 max_epochs: 10
 
 # Batch size
-batch_size: 32
+batch_size: 16
 
 # Learning rate
-lr: 1e-3
+lr: 1e-4
 
 # Accelerator
 accelerator: auto
