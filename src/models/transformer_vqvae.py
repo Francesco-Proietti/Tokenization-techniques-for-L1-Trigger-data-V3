@@ -284,7 +284,7 @@ class TransformerVQVAE(pl.LightningModule):
         else:
             x, mask = batch 
 
-        x_recon, commit_loss, _ = self(x, mask)
+        x_recon, commit_loss, idx = self(x, mask)
         
         # Reconstruction loss
         recon_loss = (x - x_recon) ** 2
@@ -304,7 +304,7 @@ class TransformerVQVAE(pl.LightningModule):
         self.log("val_recon_loss", recon_loss, prog_bar=True)
         self.log("val_commit_loss", commit_loss, prog_bar=True)
 
-        return x_recon
+        return x_recon, idx
     
 
     #Test step
