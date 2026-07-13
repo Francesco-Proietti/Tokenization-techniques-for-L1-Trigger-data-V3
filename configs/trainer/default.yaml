@@ -1,10 +1,10 @@
 # Default trainer config
 
 # Number of epochs
-max_epochs: 10
+max_epochs: 30
 
 # Batch size
-batch_size: 16
+batch_size: 32
 
 # Learning rate
 lr: 1e-4

@@ -23,45 +23,10 @@ from src.models.mlp_vqvae import MLPVQVAE
 from src.models.transformer_vqvae import TransformerVQVAE
 
 
-def extract_process_label(file_path: str) -> str:
-    """
-    Extract process label from parquet file path.
-    e.g., 'minbias-NEVENT10000-RS59000010.parquet' -> 'minbias'
-    """
-    filename = os.path.basename(file_path)
-    match = re.match(r'^([a-zA-Z]+)', filename)
-    if match:
-        return match.group(1).lower()
-    return filename.replace('.parquet', '').split('-')[0].lower()
-
-
-def get_file_to_process_dict(parquet_dirs: List[str]) -> Dict[str, List[str]]:
-    """
-    Group parquet files by process label.
-    Returns: {process_label: [file_paths]}
-    """
-    file_dict = {}
-
-    if isinstance(parquet_dirs, str):
-        parquet_dirs = [parquet_dirs]
-
-    for parquet_dir in parquet_dirs:
-        if not os.path.exists(parquet_dir):
-            print(f"Warning: Directory {parquet_dir} does not exist")
-            continue
-
-        for file_path in Path(parquet_dir).glob("*.parquet"):
-            label = extract_process_label(str(file_path))
-            if label not in file_dict:
-                file_dict[label] = []
-            file_dict[label].append(str(file_path))
-
-    return file_dict
-
 def generate_tokens_for_dataset(
     dataset,
     model: pl.LightningModule,
-    device: str,
+    data_type: str,
     max_batches: int = None
 ) -> Tuple[List[torch.Tensor], List[str], List[int]]:
     """
@@ -81,13 +46,13 @@ def generate_tokens_for_dataset(
 
     model.eval()
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+
     tokens_list = []
+    masks_list = []
     labels_list = []
-    file_indices = []
-
-    # Track current file for streaming datasets
-    current_file_idx = 0
-
+    
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=32,
@@ -95,47 +60,33 @@ def generate_tokens_for_dataset(
         pin_memory=True
     )
 
-    with torch.no_grad():
-        for batch_idx, batch in enumerate(tqdm(dataloader, desc="Generating tokens")):
-            if max_batches and batch_idx >= max_batches:
-                break
+    for batch_idx, batch in enumerate(tqdm(dataloader, desc="Generating tokens")):
+        
+        if max_batches and batch_idx >= max_batches:
+            break
 
-            if dataset.data_loading == "jet_const":
-                x, mask, j = batch
-                x, mask, j = x.to(device), mask.to(device), j.to(device)
-            else:
-                x, mask = batch
-                x, mask = x.to(device), mask.to(device)
+        if data_type == "jet_const":
+            x_mask_j, l = batch
+            x, mask, j = x_mask_j
+            x, mask, j = x.to(device), mask.to(device), j.to(device)
+            l = l.to(device)
+        else:
+            x_mask, l = batch
+            x, mask = x_mask
+            x, mask = x.to(device), mask.to(device)
+            l = l.to(device)
 
-            # Get tokens from model
-            with torch.no_grad():
-                output = model(x, mask)
-                tokens = output[2]  # [B, N] - quantization indices
+        # Get tokens from model
+        with torch.no_grad():
+            output = model(x, mask)
+            tokens = output[2]  # [B, N] - quantization indices
 
-            # Store tokens and masks for later
-            tokens_list.append(tokens.cpu())
+        # Store tokens, masks and labels 
+        tokens_list.append(tokens.cpu())
+        masks_list.append(mask.cpu())
+        labels_list.append(l.cpu())
 
-            # For jet_const, we have jet-level labels from file
-            # For event-level, we need to track by event
-            if hasattr(dataset, 'files') and dataset.files:
-                # Track which file this batch comes from
-                files_per_batch = len(dataloader)  # Approximation
-                for i in range(tokens.shape[0]):
-                    file_idx = batch_idx * tokens.shape[0] + i
-                    if file_idx < len(dataset.files):
-                        file_path = dataset.files[file_idx]
-                        label = extract_process_label(file_path)
-                        labels_list.append(label)
-                        file_indices.append(file_idx)
-
-            # If no file tracking, use sequential indices
-            if len(labels_list) == 0:
-                for i in range(tokens.shape[0]):
-                    labels_list.append(f"unknown_{current_file_idx}")
-                    file_indices.append(current_file_idx)
-                    current_file_idx += 1
-
-    return tokens_list, labels_list, file_indices
+    return tokens_list, masks_list, labels_list
 
 def generate_and_save_tokens(
     checkpoint_path: str,

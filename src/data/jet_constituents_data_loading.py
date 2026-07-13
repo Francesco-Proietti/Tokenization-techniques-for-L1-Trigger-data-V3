@@ -14,6 +14,19 @@ from torch.utils.data import IterableDataset, get_worker_info
 import lightning as pl
 import random
 
+from pathlib import Path
+
+# Label mapping for classification
+LABEL_MAP = {
+    "minbias": 0,
+    "ggHbb": 1
+}
+
+# Function to extract label from file path (name of the folder)
+def extract_label(file_path):
+    process = Path(file_path).parent.name
+    return LABEL_MAP[process]
+
 
 class JetConstL1TriggerDataset(IterableDataset):
     """
@@ -29,7 +42,8 @@ class JetConstL1TriggerDataset(IterableDataset):
         max_particles: int = 128,
         features: List[str] = ["L1T_PUPPIPart_PT", "L1T_PUPPIPart_Eta", "L1T_PUPPIPart_Phi", "L1T_PUPPIPart_PuppiW"],
         preprocessing: bool = True,
-        shuffling: bool = False
+        shuffling: bool = False,
+        labels: bool = False
     ):
         """
         Initialize the dataset.
@@ -48,6 +62,7 @@ class JetConstL1TriggerDataset(IterableDataset):
         self.kin_coord_num = 3
         self.preprocessing = preprocessing
         self.shuffling = shuffling
+        self.labels = labels
 
     def _process_event(self, row: pd.Series) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -125,6 +140,7 @@ class JetConstL1TriggerDataset(IterableDataset):
         worker_info = get_worker_info()
 
         files = self.dataset.files
+
         if self.shuffling:
             random.shuffle(files)
 
@@ -133,43 +149,70 @@ class JetConstL1TriggerDataset(IterableDataset):
         else:
             assigned_files = files[worker_info.id::worker_info.num_workers]
 
-        dataset = ds.dataset(assigned_files, format="parquet")
-
-        scanner = dataset.scanner(
-            columns=self.features,
-            use_threads=True,
-        )
-
         buffer = []
         buffer_size = 5000
+        
+        for file_path in assigned_files:
 
-        for batch in scanner.to_batches():
-            df = batch.to_pandas()
+            label = extract_label(file_path)
+            
+            dataset = ds.dataset(file_path, format="parquet")
 
-            for i in range(len(df)):
+            scanner = dataset.scanner(
+                columns=self.features,
+                use_threads=True,
+            )
+            
+            for batch in scanner.to_batches():
 
-                event = df.iloc[i]
+                df = batch.to_pandas()
 
-                if len(event["L1T_JetPuppiAK4_ConstituentsIdx"]) == 0:
-                    continue
+                for i in range(len(df)):
 
-                if self.shuffling:
-                    buffer.append(event)
+                    event = df.iloc[i]
 
-                    if len(buffer) >= buffer_size:
-                        idx = random.randint(0, len(buffer)-1)
-                        for data in self._process_event(buffer.pop(idx)):
-                            yield data
-                else:
-                    for data in self._process_event(df.iloc[i]):
-                        yield data
+                    if len(event["L1T_JetPuppiAK4_ConstituentsIdx"]) == 0:
+                        continue
+
+                    if self.shuffling:
+
+                        buffer.append((event, label))
+
+                        if len(buffer) >= buffer_size:
+
+                            idx = random.randint(0, len(buffer)-1)
+                            
+                            event, label = buffer.pop(idx)
+                            
+                            if self.labels:
+
+                                for data in self._process_event(event):
+                                    yield data, label
+                            else:
+                                for data in self._process_event(event):
+                                    yield data
+                    else:
+                        if self.labels:
+                            for data in self._process_event(event):
+                                yield data, label
+                        else:
+                            for data in self._process_event(event):
+                                yield data
+                        
 
         if self.shuffling:        
             # Remaining events in buffer
             while buffer:
+
                 idx = random.randint(0, len(buffer)-1)
-                for data in self._process_event(buffer.pop(idx)):
-                    yield data                 
+                event, label = buffer.pop(idx)
+
+                if self.labels:
+                    for data in self._process_event(event):
+                        yield data, label
+                else:
+                    for data in self._process_event(buffer.pop(idx)):
+                        yield data                 
 
 
 class JetConstL1TriggerDataModule(pl.LightningDataModule):

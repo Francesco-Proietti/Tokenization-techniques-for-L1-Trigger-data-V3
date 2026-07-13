@@ -16,7 +16,7 @@ hidden_dims:
 latent_dim: 4
 
 # Codebook size (how many codebook vectors)
-codebook_size: 512
+codebook_size: 256
 
 # Set the rotation trick (True/False) 
 # (If False the model uses STE)
