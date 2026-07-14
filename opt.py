@@ -8,6 +8,13 @@ import lightning as pl
 
 from omegaconf import DictConfig
 
+from lightning.pytorch.callbacks import (
+    ModelCheckpoint,
+    EarlyStopping
+)
+
+from optuna.integration import PyTorchLightningPruningCallback
+
 from src.models.model_registry import MODEL_REGISTRY
 from src.data.data_registry import DATA_REGISTRY
 
@@ -16,33 +23,38 @@ from src.data.data_registry import DATA_REGISTRY
 def objective(trial, cfg):
 
     cfg = copy.deepcopy(cfg)
-
+    
+    # Learning Rate
     cfg.trainer.lr = trial.suggest_float(
         "lr",
         1e-5,
         1e-2,
         log=True
     )
-
+    
+    # Batch size
     cfg.trainer.batch_size = trial.suggest_categorical(
         "batch_size",
         [32,64,128]
     )
-
+    
+    # Latent dimension
     cfg.model.latent_dim = trial.suggest_categorical(
         "latent_dim",
         [4, 8, 16]
     )
     
+    # EMA decay
     cfg.model.decay = trial.suggest_float(
         "decay",
-        0.7,
+        0.70,
         0.9999
     )
-
-    cfg.model.commitment_weight = trial.suggest_float(
+    
+    # Beta (commitment weight)
+    cfg.model.beta = trial.suggest_float(
         "beta",
-        0.6,
+        0.60,
         0.95
     )
 
@@ -68,6 +80,28 @@ def objective(trial, cfg):
         lr=cfg.trainer.lr
     )
 
+    # Callbacks
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=f"optuna_checkpoints/trial_{trial.number}",
+        filename="best",
+        monitor="val_loss",
+        mode="min",
+        save_top_k=1,
+        save_last=False
+    )
+
+    early_stopping = EarlyStopping(
+        monitor="val_loss",
+        mode="min",
+        patience=10,
+        verbose=False
+    )
+
+    pruning_callback = PyTorchLightningPruningCallback(
+        trial,
+        monitor="val_loss"
+    )
+
 
     # Trainer
     trainer = pl.Trainer(
@@ -75,7 +109,11 @@ def objective(trial, cfg):
         accelerator=cfg.trainer.accelerator,
         devices=cfg.trainer.devices,
         logger=False,
-        enable_checkpointing=False
+        callbacks=[
+            checkpoint_callback,
+            early_stopping,
+            pruning_callback
+        ]
     )
 
 
@@ -83,7 +121,7 @@ def objective(trial, cfg):
     trainer.fit(model, datamodule=data_module)
 
 
-    return trainer.callback_metrics["val_loss"].item()
+    return checkpoint_callback.best_model_score.item()
 
 
 @hydra.main(
@@ -94,7 +132,11 @@ def objective(trial, cfg):
 def main(cfg: DictConfig):
 
     study = optuna.create_study(
-        direction="minimize"
+        direction="minimize",
+        pruner=optuna.pruners.MedianPruner(
+            n_startup_trials=10,
+            n_warmup_steps=5
+        )
     )
 
     study.optimize(
@@ -106,12 +148,19 @@ def main(cfg: DictConfig):
     print("Best trial")
     print("==============================")
 
-    print(f"Validation Loss: {study.best_value:.6f}")
+    print(f"Best validation Loss: {study.best_value:.6f}")
 
     print("\nBest hyperparameters:")
 
     for key, value in study.best_params.items():
         print(f"{key}: {value}")
+
+    print(f"\nBest trial number: {study.best_trial.number}")
+
+    print(
+        f"\nBest checkpoint: "
+        f"optuna_checkpoints/trial_{study.best_trial.number}/best.ckpt"
+    )
     
 
 if __name__ == "__main__":
