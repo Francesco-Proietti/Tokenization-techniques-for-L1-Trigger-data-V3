@@ -182,7 +182,7 @@ def generate_and_save_tokens(
     # Combine all batches
     all_tokens = torch.cat(tokens_list, dim=0)  # [total_events, max_particles/jets]
     all_masks = torch.cat(masks_list, dim=0)
-    all_labels = labels_list[:all_tokens.shape[0]]
+    all_labels = torch.cat(labels_list, dim=0)
     
 
     # Save as PyTorch tensor
@@ -227,7 +227,7 @@ def generate_and_save_tokens(
     print(f"Unique tokens used: {len(unique_tokens)} ({usage:.2f}% of codebook)")
     print("="*50)
 
-    return all_tokens, all_masks, all_labels
+    return None
 
 
 if __name__ == "__main__":
@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
     generate_and_save_tokens(
         checkpoint_path=args.checkpoint,
-        parquet_dirs=[args.parquet_dir],
+        parquet_dirs=args.parquet_dir,
         data_type=args.data_type,
         output_dir=args.output_dir,
         model_type=args.model_type,
