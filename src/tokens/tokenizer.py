@@ -2,7 +2,7 @@
 
 """
 Generate tokens from a trained VQ-VAE model.
-Saves tokens along with event labels for downstream GPT training.
+Saves tokens for downstream GPT training.
 """
 
 #Import libraries
@@ -142,7 +142,8 @@ def generate_and_save_tokens(
                 "L1T_JetPuppiAK4_Mass", "L1T_JetPuppiAK4_ConstituentsIdx"
             ],
             preprocessing=True,
-            shuffling=False
+            shuffling=False,
+            labels=True
         )
     elif data_type == "event_part":
         dataset = EventPartL1TriggerDataset(
@@ -154,7 +155,8 @@ def generate_and_save_tokens(
             ],
             puppiw_threshold=0.05,
             preprocessing=True,
-            shuffling=False
+            shuffling=False,
+            labels=True
         )
     elif data_type == "event_jets":
         dataset = EventJetsL1TriggerDataset(
@@ -162,14 +164,15 @@ def generate_and_save_tokens(
             max_jets=16,
             features=["L1T_JetPuppiAK4_PT", "L1T_JetPuppiAK4_Eta", "L1T_JetPuppiAK4_Phi"],
             preprocessing=True,
-            shuffling=False
+            shuffling=False,
+            labels=True
         )
     else:
         raise ValueError(f"Unknown data_type: {data_type}")
 
     # Generate tokens
     print("Generating tokens...")
-    tokens_list, labels_list, file_indices = generate_tokens_for_dataset(
+    tokens_list, masks_list, labels_list,  = generate_tokens_for_dataset(
         dataset, model, device, max_batches=None
     )
 
@@ -178,23 +181,24 @@ def generate_and_save_tokens(
 
     # Combine all batches
     all_tokens = torch.cat(tokens_list, dim=0)  # [total_events, max_particles/jets]
+    all_masks = torch.cat(masks_list, dim=0)
     all_labels = labels_list[:all_tokens.shape[0]]
-    all_file_indices = file_indices[:all_tokens.shape[0]]
+    
 
     # Save as PyTorch tensor
     tokens_path = os.path.join(output_dir, "tokens.pt")
     torch.save(all_tokens, tokens_path)
     print(f"Saved tokens to {tokens_path}")
 
+    # Save masks
+    masks_path = os.path.join(output_dir, "masks.pt")
+    torch.save(all_masks, masks_path)
+    print(f"Saved masks to {masks_path}")
+
     # Save labels
     labels_path = os.path.join(output_dir, "labels.pt")
     torch.save(all_labels, labels_path)
     print(f"Saved labels to {labels_path}")
-
-    # Save file indices
-    indices_path = os.path.join(output_dir, "file_indices.pt")
-    torch.save(all_file_indices, indices_path)
-    print(f"Saved file indices to {indices_path}")
 
     # Save config
     config = {
@@ -223,7 +227,7 @@ def generate_and_save_tokens(
     print(f"Unique tokens used: {len(unique_tokens)} ({usage:.2f}% of codebook)")
     print("="*50)
 
-    return all_tokens, all_labels
+    return all_tokens, all_masks, all_labels
 
 
 if __name__ == "__main__":
