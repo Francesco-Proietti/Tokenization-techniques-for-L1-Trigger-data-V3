@@ -173,7 +173,7 @@ def generate_and_save_tokens(
     # Generate tokens
     print("Generating tokens...")
     tokens_list, masks_list, labels_list,  = generate_tokens_for_dataset(
-        dataset, model, device, max_batches=None
+        dataset, model, data_type, max_batches=None
     )
 
     # Save tokens
@@ -207,7 +207,7 @@ def generate_and_save_tokens(
         "codebook_size": codebook_size,
         "max_particles": max_particles if data_type != "event_jets" else 16,
         "num_events": all_tokens.shape[0],
-        "unique_labels": list(set(all_labels)),
+        "unique_labels": torch.unique(all_labels).tolist(),
     }
     config_path = os.path.join(output_dir, "config.pt")
     torch.save(config, config_path)
