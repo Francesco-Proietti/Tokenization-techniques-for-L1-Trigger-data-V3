@@ -52,7 +52,7 @@ class NormFormerBlock(nn.Module):
             batch_first=True
         )
         
-        # Seconf LayerNorm
+        # Second LayerNorm
         self.norm2 = nn.LayerNorm(self.input_dim)
         
         # MLP 
